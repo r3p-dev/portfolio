@@ -9,7 +9,7 @@
 <section class="py-5">
 	<div class="grid gap-12 lg:grid-cols-2">
 		<div>
-			<h2 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">About</h2>
+			<h2 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">About</h2>
 			<div class="mt-6 space-y-4 text-muted-foreground">
 				<p>
 					I&apos;m a fullstack developer with a passion for building beautiful, functional, and
@@ -24,7 +24,7 @@
 		</div>
 
 		<div>
-			<h3 class="text-lg font-semibold">Skills & Technologies</h3>
+			<h3 class="text-lg font-semibold text-foreground">Skills & Technologies</h3>
 			<div class="mt-6 space-y-6">
 				{#each skills as skillGroup (skillGroup.category)}
 					<div>
@@ -33,7 +33,9 @@
 						</h4>
 						<div class="mt-2 flex flex-wrap gap-2">
 							{#each skillGroup.items as skill (skill)}
-								<span class="rounded-lg border border-border bg-secondary px-3 py-1 text-sm">
+								<span
+									class="rounded-lg border border-border bg-secondary px-3 py-1 text-sm text-foreground"
+								>
 									{skill}
 								</span>
 							{/each}
