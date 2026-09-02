@@ -1,9 +1,19 @@
-export { handleSubmission, EMPTY_STATE } from './form'
-export { recentEntries, addEntry, isDuplicate } from './db'
+export { handleSubmission, readView, EMPTY_STATE } from './form'
+export {
+	recentEntries,
+	entryById,
+	addEntry,
+	updateEntry,
+	deleteEntry,
+	isDuplicate
+} from './db'
+export { readOwner, claimOwner } from './identity'
 export { clean, validate, LIMITS } from './validation'
 export type {
 	Entry,
 	GuestbookField,
 	GuestbookError,
-	GuestbookState
+	GuestbookNotice,
+	GuestbookState,
+	GuestbookView
 } from './types'

@@ -1,43 +1,30 @@
 ---
 import { getRelativeLocaleUrl } from 'astro:i18n'
 import { AppLayout } from '@components/layouts'
-import { Button, Card, CardContent } from '@components/atoms'
-import {
-	canonical as canonicalUrl,
-	schema,
-	type PageSeo
-} from '@lib/seo'
+import { Badge, Button, Card, CardContent, Icon } from '@components/atoms'
+import { GuestbookFields } from '@components/molecules'
+import { canonical as canonicalUrl, schema, type PageSeo } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
 import {
 	EMPTY_STATE,
+	type GuestbookNotice,
 	type GuestbookState,
-	type GuestbookError,
-	recentEntries,
-	LIMITS
+	recentEntries
 } from '@lib/server'
 
 interface Props {
 	locale: Locale
 	state?: GuestbookState
-	signed?: boolean
+	editing?: number | undefined
+	notice?: GuestbookNotice | undefined
+	owner?: string | undefined
 }
 
-const { locale, state = EMPTY_STATE, signed = false } = Astro.props
+const { locale, state = EMPTY_STATE, editing, notice, owner } = Astro.props
 
 const t = useTranslations(locale)
 
-const { errors, values } = state
 const entries = recentEntries()
-
-const errorText: Record<GuestbookError, string> = {
-	name_required: t('guestbook_error_name'),
-	name_too_long: t('guestbook_error_name_long', { max: LIMITS.name.max }),
-	message_required: t('guestbook_error_message'),
-	message_too_long: t('guestbook_error_message_long', {
-		max: LIMITS.message.max
-	}),
-	duplicate: t('guestbook_error_duplicate')
-}
 
 const title = `${t('guestbook_title')} — r3p.dev`
 const description =
@@ -54,7 +41,10 @@ const seo: PageSeo = {
 		schema.webPage({ canonical, name: title, description, breadcrumb: true }),
 		schema.breadcrumbList(canonical, [
 			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
-			{ name: t('guestbook_title'), path: getRelativeLocaleUrl(locale, '/guestbook') }
+			{
+				name: t('guestbook_title'),
+				path: getRelativeLocaleUrl(locale, '/guestbook')
+			}
 		])
 	]
 }
@@ -64,10 +54,28 @@ const countLabel =
 		? t('guestbook_note_count_one', { count: entries.length })
 		: t('guestbook_note_count_other', { count: entries.length })
 
-const field =
-	'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive'
+const noticeText: Record<GuestbookNotice, string> = {
+	signed: t('guestbook_thanks'),
+	updated: t('guestbook_updated'),
+	deleted: t('guestbook_deleted'),
+	not_allowed: t('guestbook_not_allowed')
+}
 
+const signState = state.editing === undefined ? state : EMPTY_STATE
+
+const path = Astro.url.pathname
 const asDate = (iso: string) => new Date(`${iso.replace(' ', 'T')}Z`)
+
+const formatDate = (iso: string) =>
+	new Intl.DateTimeFormat(locale === 'id' ? 'id-ID' : 'en-GB', {
+		day: '2-digit',
+		month: 'short',
+		year: 'numeric',
+		timeZone: 'UTC'
+	}).format(asDate(iso))
+
+const ownerAction =
+	'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4'
 ---
 
 <AppLayout seo={seo}>
@@ -85,73 +93,28 @@ const asDate = (iso: string) => new Date(`${iso.replace(' ', 'T')}Z`)
 			</h2>
 
 			{
-				signed && (
+				notice && (
 					<p
-						role="status"
-						class="rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground"
+						role={notice === 'not_allowed' ? 'alert' : 'status'}
+						class:list={[
+							'rounded-lg border px-4 py-3 text-sm',
+							notice === 'not_allowed'
+								? 'border-destructive/40 bg-card text-destructive'
+								: 'border-border bg-card text-foreground'
+						]}
 					>
-						{t('guestbook_thanks')}
+						{noticeText[notice]}
 					</p>
 				)
 			}
 
-			<form method="POST" class="max-w-xl space-y-4">
-				<div class="space-y-2">
-					<label for="name" class="block text-sm font-medium text-foreground">
-						{t('guestbook_name')}
-					</label>
-					<input
-						id="name"
-						name="name"
-						type="text"
-						required
-						minlength={LIMITS.name.min}
-						maxlength={LIMITS.name.max}
-						autocomplete="nickname"
-						value={values.name}
-						aria-invalid={errors.name ? 'true' : undefined}
-						aria-describedby={errors.name ? 'name-error' : undefined}
-						class={field}
-					/>
-					{
-						errors.name && (
-							<p id="name-error" class="text-sm text-destructive">
-								{errorText[errors.name]}
-							</p>
-						)
-					}
-				</div>
-
-				<div class="space-y-2">
-					<label
-						for="message"
-						class="block text-sm font-medium text-foreground"
-					>
-						{t('guestbook_message')}
-					</label>
-					<textarea
-						id="message"
-						name="message"
-						rows="4"
-						required
-						minlength={LIMITS.message.min}
-						maxlength={LIMITS.message.max}
-						aria-invalid={errors.message ? 'true' : undefined}
-						aria-describedby={errors.message ? 'message-error' : undefined}
-						class={field}>{values.message}</textarea
-					>
-					{
-						errors.message && (
-							<p
-								id="message-error"
-								role="alert"
-								class="text-sm text-destructive"
-							>
-								{errorText[errors.message]}
-							</p>
-						)
-					}
-				</div>
+			<form method="POST" class="w-full space-y-4">
+				<GuestbookFields
+					locale={locale}
+					id="sign"
+					values={signState.values}
+					errors={signState.errors}
+				/>
 
 				<div hidden aria-hidden="true">
 					<label for="website">{t('guestbook_honeypot')}</label>
@@ -166,6 +129,10 @@ const asDate = (iso: string) => new Date(`${iso.replace(' ', 'T')}Z`)
 
 				<Button type="submit">{t('guestbook_submit')}</Button>
 			</form>
+
+			<p class="max-w-prose text-xs text-muted-foreground">
+				{t('guestbook_ownership_hint')}
+			</p>
 		</section>
 
 		<section class="space-y-4" aria-labelledby="entries-heading" id="entries">
@@ -178,39 +145,136 @@ const asDate = (iso: string) => new Date(`${iso.replace(' ', 'T')}Z`)
 					<p class="text-muted-foreground">{t('guestbook_empty')}</p>
 				) : (
 					<ul class="space-y-4">
-						{entries.map((entry) => (
-							<li>
-								<Card>
-									<CardContent class="space-y-2">
-										<div class="flex flex-wrap items-baseline justify-between gap-2">
-											<span class="font-medium text-foreground">
-												{entry.name}
-											</span>
-											<time
-												datetime={asDate(entry.created_at).toISOString()}
-												class="text-xs text-muted-foreground"
+						{entries.map((entry) => {
+							const mine = owner !== undefined && entry.owner === owner
+							const open = mine && editing === entry.id
+							const deleteForm = `delete-entry-${entry.id}`
+
+							const values =
+								state.editing === entry.id
+									? state.values
+									: { name: entry.name, message: entry.message }
+
+							const errors = state.editing === entry.id ? state.errors : {}
+
+							return (
+								<li id={`entry-${entry.id}`} class="scroll-mt-24">
+									<Card>
+										<CardContent class="space-y-2">
+											<div class="flex flex-wrap items-baseline justify-between gap-2">
+												<span class="flex items-baseline gap-2 font-medium text-foreground">
+													{entry.name}
+													{mine && (
+														<Badge variant="secondary">
+															{t('guestbook_yours')}
+														</Badge>
+													)}
+												</span>
+												<time
+													datetime={asDate(
+														entry.updated_at ?? entry.created_at
+													).toISOString()}
+													class="text-xs text-muted-foreground"
+												>
+													{formatDate(entry.created_at)}
+													{entry.updated_at && ` · ${t('guestbook_edited')}`}
+												</time>
+											</div>
+
+											{open ? (
+												<form
+													method="POST"
+													class="space-y-4 pt-2"
+													aria-label={t('guestbook_edit_note')}
+												>
+													<input type="hidden" name="intent" value="update" />
+													<input type="hidden" name="id" value={entry.id} />
+
+													<GuestbookFields
+														locale={locale}
+														id={`entry-${entry.id}`}
+														values={values}
+														errors={errors}
+														autofocus
+													/>
+
+													<div class="flex flex-wrap items-center gap-2">
+														<Button type="submit">{t('guestbook_save')}</Button>
+														<Button
+															href={`${path}#entry-${entry.id}`}
+															variant="ghost"
+														>
+															{t('guestbook_cancel')}
+														</Button>
+														<button
+															type="submit"
+															form={deleteForm}
+															class={`${ownerAction} ml-auto text-destructive hover:bg-destructive/10`}
+														>
+															<Icon name="trash" />
+															{t('guestbook_delete')}
+														</button>
+													</div>
+												</form>
+											) : (
+												<p class="text-sm wrap-break-word whitespace-pre-line text-muted-foreground">
+													{entry.message}
+												</p>
+											)}
+
+											{mine && !open && (
+												<div class="flex flex-wrap items-center gap-1 pt-1">
+													<a
+														href={`${path}?edit=${entry.id}#entry-${entry.id}`}
+														class={`${ownerAction} text-muted-foreground hover:bg-muted hover:text-foreground`}
+														aria-label={t('guestbook_edit_note')}
+													>
+														<Icon name="pencil" />
+														{t('guestbook_edit')}
+													</a>
+													<button
+														type="submit"
+														form={deleteForm}
+														class={`${ownerAction} text-destructive hover:bg-destructive/10`}
+														aria-label={t('guestbook_delete_note')}
+													>
+														<Icon name="trash" />
+														{t('guestbook_delete')}
+													</button>
+												</div>
+											)}
+										</CardContent>
+
+										{mine && (
+											<form
+												method="POST"
+												id={deleteForm}
+												data-confirm={t('guestbook_delete_confirm')}
+												hidden
 											>
-												{new Intl.DateTimeFormat(
-													locale === 'id' ? 'id-ID' : 'en-GB',
-													{
-														day: '2-digit',
-														month: 'short',
-														year: 'numeric',
-														timeZone: 'UTC'
-													}
-												).format(asDate(entry.created_at))}
-											</time>
-										</div>
-										<p class="text-sm wrap-break-word whitespace-pre-line text-muted-foreground">
-											{entry.message}
-										</p>
-									</CardContent>
-								</Card>
-							</li>
-						))}
+												<input type="hidden" name="intent" value="delete" />
+												<input type="hidden" name="id" value={entry.id} />
+											</form>
+										)}
+									</Card>
+								</li>
+							)
+						})}
 					</ul>
 				)
 			}
 		</section>
 	</div>
 </AppLayout>
+
+<script>
+	const forms = document.querySelectorAll<HTMLFormElement>('form[data-confirm]')
+
+	for (const form of forms) {
+		form.addEventListener('submit', (event) => {
+			if (!window.confirm(form.dataset.confirm ?? '')) {
+				event.preventDefault()
+			}
+		})
+	}
+</script>

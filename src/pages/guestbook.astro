@@ -1,7 +1,7 @@
 ---
 import Guestbook from '@components/pages/guestbook.astro'
 import { defaultLocale } from '@lib/i18n'
-import { EMPTY_STATE, handleSubmission } from '@lib/server'
+import { EMPTY_STATE, handleSubmission, readOwner, readView } from '@lib/server'
 
 export const prerender = false
 
@@ -10,7 +10,8 @@ let state = EMPTY_STATE
 if (Astro.request.method === 'POST') {
 	const result = await handleSubmission(
 		Astro.request,
-		`${Astro.url.pathname}?signed=1#entries`
+		Astro.cookies,
+		Astro.url.pathname
 	)
 
 	if (result instanceof Response) return result
@@ -18,7 +19,8 @@ if (Astro.request.method === 'POST') {
 	state = result
 }
 
-const signed = Astro.url.searchParams.has('signed')
+const view = readView(Astro.url, state)
+const owner = readOwner(Astro.cookies)
 ---
 
-<Guestbook locale={defaultLocale} state={state} signed={signed} />
+<Guestbook locale={defaultLocale} state={state} owner={owner} {...view} />

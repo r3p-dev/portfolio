@@ -1,0 +1,92 @@
+---
+import { useTranslations, type Locale } from '@lib/i18n'
+import {
+	LIMITS,
+	type GuestbookError,
+	type GuestbookField,
+	type GuestbookState
+} from '@lib/server'
+
+interface Props {
+	locale: Locale
+	id: string
+	values: GuestbookState['values']
+	errors: Partial<Record<GuestbookField, GuestbookError>>
+	autofocus?: boolean
+}
+
+const { locale, id, values, errors, autofocus = false } = Astro.props
+
+const t = useTranslations(locale)
+
+const errorText: Record<GuestbookError, string> = {
+	name_required: t('guestbook_error_name'),
+	name_too_long: t('guestbook_error_name_long', { max: LIMITS.name.max }),
+	message_required: t('guestbook_error_message'),
+	message_too_long: t('guestbook_error_message_long', {
+		max: LIMITS.message.max
+	}),
+	duplicate: t('guestbook_error_duplicate')
+}
+
+const field =
+	'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive'
+
+const nameId = `${id}-name`
+const messageId = `${id}-message`
+---
+
+<div class="space-y-2">
+	<label for={nameId} class="block text-sm font-medium text-foreground">
+		{t('guestbook_name')}
+	</label>
+	<input
+		id={nameId}
+		name="name"
+		type="text"
+		required
+		minlength={LIMITS.name.min}
+		maxlength={LIMITS.name.max}
+		autocomplete="nickname"
+		autofocus={autofocus || undefined}
+		value={values.name}
+		aria-invalid={errors.name ? 'true' : undefined}
+		aria-describedby={errors.name ? `${nameId}-error` : undefined}
+		class={field}
+	/>
+	{
+		errors.name && (
+			<p id={`${nameId}-error`} role="alert" class="text-sm text-destructive">
+				{errorText[errors.name]}
+			</p>
+		)
+	}
+</div>
+
+<div class="space-y-2">
+	<label for={messageId} class="block text-sm font-medium text-foreground">
+		{t('guestbook_message')}
+	</label>
+	<textarea
+		id={messageId}
+		name="message"
+		rows="4"
+		required
+		minlength={LIMITS.message.min}
+		maxlength={LIMITS.message.max}
+		aria-invalid={errors.message ? 'true' : undefined}
+		aria-describedby={errors.message ? `${messageId}-error` : undefined}
+		class={field}>{values.message}</textarea
+	>
+	{
+		errors.message && (
+			<p
+				id={`${messageId}-error`}
+				role="alert"
+				class="text-sm text-destructive"
+			>
+				{errorText[errors.message]}
+			</p>
+		)
+	}
+</div>

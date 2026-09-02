@@ -51,6 +51,20 @@ export const id: Messages = {
 	guestbook_error_message_long: 'Pesan maksimal {max} karakter.',
 	guestbook_error_duplicate:
 		'Pesan itu baru saja dikirim. Coba tulis yang lain.',
+	guestbook_yours: 'Pesanmu',
+	guestbook_edit: 'Ubah',
+	guestbook_edit_note: 'Ubah pesanmu',
+	guestbook_delete: 'Hapus',
+	guestbook_delete_note: 'Hapus pesanmu',
+	guestbook_delete_confirm: 'Hapus pesanmu? Tindakan ini tidak bisa dibatalkan.',
+	guestbook_save: 'Simpan perubahan',
+	guestbook_cancel: 'Batal',
+	guestbook_edited: 'diubah',
+	guestbook_updated: 'Pesanmu sudah diperbarui.',
+	guestbook_deleted: 'Pesanmu sudah dihapus.',
+	guestbook_not_allowed: 'Pesan itu bukan milikmu.',
+	guestbook_ownership_hint:
+		'Kamu bisa mengubah atau menghapus pesanmu sendiri dari peramban yang kamu pakai saat mengisi.',
 	error_404_heading: 'Halaman tidak ditemukan',
 	error_generic_heading: 'Terjadi kesalahan',
 	error_404_body:

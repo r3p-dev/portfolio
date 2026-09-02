@@ -50,6 +50,20 @@ export const en = {
 		'Please keep your message under {max} characters.',
 	guestbook_error_duplicate:
 		'That message was just signed. Try something different.',
+	guestbook_yours: 'Your note',
+	guestbook_edit: 'Edit',
+	guestbook_edit_note: 'Edit your note',
+	guestbook_delete: 'Delete',
+	guestbook_delete_note: 'Delete your note',
+	guestbook_delete_confirm: 'Delete your note? This cannot be undone.',
+	guestbook_save: 'Save changes',
+	guestbook_cancel: 'Cancel',
+	guestbook_edited: 'edited',
+	guestbook_updated: 'Your note has been updated.',
+	guestbook_deleted: 'Your note has been deleted.',
+	guestbook_not_allowed: 'That note is not yours to change.',
+	guestbook_ownership_hint:
+		'You can edit or delete your own notes from the browser you signed with.',
 	error_404_heading: 'Page not found',
 	error_generic_heading: 'Something went wrong',
 	error_404_body:
