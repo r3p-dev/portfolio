@@ -1,0 +1,30 @@
+---
+import type { TocNode } from '@lib/content'
+
+interface Props {
+	nodes: TocNode[]
+	nested?: boolean
+}
+
+const { nodes, nested = false } = Astro.props
+const Self = Astro.self
+---
+
+<ol class:list={['m-0 list-none text-sm font-medium', nested && 'pl-4']}>
+	{
+		nodes.map((node) => (
+			<li class="mt-0 pt-2 text-muted-foreground transition-colors">
+				<a
+					href={`#${node.slug}`}
+					class="block hover:text-foreground focus-visible:text-foreground aria-[current=location]:font-semibold aria-[current=location]:text-foreground"
+				>
+					{node.text}
+				</a>
+
+				{node.children.length > 0 && (
+					<Self nodes={node.children} nested={true} />
+				)}
+			</li>
+		))
+	}
+</ol>

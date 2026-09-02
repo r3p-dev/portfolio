@@ -1,0 +1,20 @@
+---
+import type { GetStaticPaths } from 'astro'
+
+import TagDetail from '../../components/pages/tag-detail.astro'
+import { allTags, taggedEntries } from '../../lib/content/utils'
+import { defaultLocale } from '@lib/i18n'
+
+export const getStaticPaths = (async () => {
+	const tags = await allTags()
+	const byTag = new Map(
+		await Promise.all(tags.map(async (tag) => [tag, await taggedEntries(tag)] as const))
+	)
+
+	return tags.map((tag) => ({ params: { slug: tag }, props: { tag, items: byTag.get(tag)! } }))
+}) satisfies GetStaticPaths
+
+const { tag, items } = Astro.props
+---
+
+<TagDetail locale={defaultLocale} tag={tag} items={items} />

@@ -1,0 +1,16 @@
+---
+import Badge from './badge.astro'
+import { useTranslations, type Locale } from '@lib/i18n'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+---
+
+<Badge variant="outline" class="uppercase">
+	{t('status_wip')}
+	<span class="sr-only">— {t('status_wip_full')}</span>
+</Badge>

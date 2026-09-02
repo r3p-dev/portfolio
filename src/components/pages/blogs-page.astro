@@ -1,0 +1,81 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import {
+	canonical as canonicalUrl,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import type { Blog } from '@lib/content'
+import { AppLayout } from '@components/layouts'
+import { BlogList } from '@components/organisms'
+
+interface Props {
+	locale: Locale
+	blogs: Blog[]
+	page: number
+	totalPages: number
+	total: number
+}
+
+const { locale, blogs, page, totalPages: pages, total } = Astro.props
+const t = useTranslations(locale)
+
+const path = `/blogs/page/${page}`
+const canonical = canonicalUrl(path, locale)
+const title = `${t('page_blogs_title')} — page ${page} — r3p.dev`
+const description = `Page ${page} of writing on infrastructure, containers, Linux servers, and web development on r3p.dev.`
+
+const seo: PageSeo = {
+	path,
+	locale,
+	title,
+	description,
+	jsonLd: [
+		...schema.siteNodes(description),
+		schema.webPage({
+			canonical,
+			name: title,
+			description,
+			alsoTypes: ['CollectionPage'],
+			breadcrumb: true
+		}),
+		schema.breadcrumbList(canonical, [
+			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+			{ name: t('page_blogs_title'), path: getRelativeLocaleUrl(locale, '/blogs') },
+			{
+				name: t('pagination_page_n', { page }),
+				path: getRelativeLocaleUrl(locale, path)
+			}
+		]),
+		schema.itemList(
+			canonical,
+			blogs.map((blog) => ({
+				name: blog.data.title,
+				path: getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)
+			}))
+		)
+	],
+	prev: page === 2 ? '/blogs' : `/blogs/page/${page - 1}`,
+	next: page < pages ? `/blogs/page/${page + 1}` : undefined
+}
+---
+
+<AppLayout seo={seo}>
+	<div class="space-y-12">
+		<div class="space-y-4">
+			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+				{t('page_blogs_title')}
+			</h1>
+			<p class="text-muted-foreground">{t('blogs_lead')}</p>
+		</div>
+
+		<BlogList
+			blogs={blogs}
+			page={page}
+			totalPages={pages}
+			total={total}
+			locale={locale}
+		/>
+	</div>
+</AppLayout>

@@ -1,0 +1,63 @@
+---
+import { useTranslations, type Locale } from '@lib/i18n'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+---
+
+<div
+	data-code-copy
+	data-label-copy={t('code_copy')}
+	data-label-copied={t('code_copied')}
+	hidden
+>
+</div>
+
+<script>
+	const config = document.querySelector<HTMLElement>('[data-code-copy]')
+	const wrappers = document.querySelectorAll<HTMLElement>('.code-block-wrapper')
+
+	if (config && wrappers.length && navigator.clipboard) {
+		const labelCopy = config.dataset.labelCopy ?? 'Copy code'
+		const labelCopied = config.dataset.labelCopied ?? 'Copied'
+
+		const COPY_ICON =
+			'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z"/><path d="M4.012 16.737a2 2 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg>'
+		const DONE_ICON =
+			'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg>'
+
+		for (const wrapper of wrappers) {
+			const button = document.createElement('button')
+			button.type = 'button'
+			button.className =
+				'absolute top-2 right-2 rounded p-2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50'
+			button.setAttribute('aria-label', labelCopy)
+			button.innerHTML = COPY_ICON
+
+			button.addEventListener('click', async () => {
+				const code = wrapper.querySelector('pre code')
+				if (!code) return
+
+				try {
+					await navigator.clipboard.writeText(code.textContent ?? '')
+				} catch {
+					return
+				}
+
+				button.innerHTML = DONE_ICON
+				button.setAttribute('aria-label', labelCopied)
+
+				setTimeout(() => {
+					button.innerHTML = COPY_ICON
+					button.setAttribute('aria-label', labelCopy)
+				}, 2000)
+			})
+
+			wrapper.append(button)
+		}
+	}
+</script>

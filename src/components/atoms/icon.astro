@@ -1,0 +1,25 @@
+---
+import { iconMarkup, type IconName } from './icons'
+
+interface Props {
+	name: IconName
+	title?: string
+	class?: string
+}
+
+const { name, title, class: className } = Astro.props
+---
+
+<svg
+	class={className}
+	viewBox="0 0 24 24"
+	fill="none"
+	stroke="currentColor"
+	stroke-width="2"
+	stroke-linecap="round"
+	stroke-linejoin="round"
+	role={title ? 'img' : undefined}
+	aria-label={title}
+	aria-hidden={title ? undefined : 'true'}
+	set:html={iconMarkup(name)}
+/>

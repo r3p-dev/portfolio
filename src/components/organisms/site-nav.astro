@@ -1,0 +1,99 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { Icon, ProgressiveBlur, type IconName } from '@components/atoms'
+import NotesMenu from './notes-menu.astro'
+import SettingsMenu from './settings-menu.astro'
+
+interface Props {
+	locale: Locale
+	path: string
+}
+
+const { locale, path } = Astro.props
+const t = useTranslations(locale)
+
+const items: { href: string; icon: IconName; label: string }[] = [
+	{ href: '/', icon: 'home', label: t('nav_home') },
+	{ href: '/projects', icon: 'list-check', label: t('nav_projects') }
+]
+
+const trailing: { href: string; icon: IconName; label: string }[] = [
+	{ href: '/guestbook', icon: 'message-circle', label: t('nav_guestbook') }
+]
+
+const DOCK_ITEM =
+	'dock-item flex size-10 items-center justify-center [&>*]:origin-bottom [&>*]:transition-transform [&>*]:duration-[220ms] [&>*]:ease-[cubic-bezier(0.22,1,0.36,1)] hover:[&>*]:scale-[1.35] focus-within:[&>*]:scale-[1.35] [&:hover+.dock-item>*]:scale-[1.15] [&:has(+.dock-item:hover)>*]:scale-[1.15]'
+
+function isActive(href: string) {
+	if (href === '/') return path === '/'
+
+	return path === href || path.startsWith(`${href}/`)
+}
+---
+
+<div
+	class="dock-root pointer-events-none fixed inset-x-0 bottom-0 flex flex-col items-center"
+>
+	<nav aria-label={t('nav_primary')} class="pointer-events-auto z-50 mb-5">
+		<ul
+			class="dock mx-auto mt-8 flex h-14 w-max items-center justify-center gap-2 rounded-2xl border p-2 backdrop-blur-md supports-backdrop-filter:bg-white/10 dark:supports-backdrop-filter:bg-black/10"
+		>
+			{
+				items.map((item) => (
+					<li class={DOCK_ITEM}>
+						<a
+							href={getRelativeLocaleUrl(locale, item.href)}
+							aria-current={isActive(item.href) ? 'page' : undefined}
+							class:list={[
+								'group/nav relative inline-flex size-12 shrink-0 items-center justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+								isActive(item.href) && 'bg-muted text-foreground'
+							]}
+						>
+							<Icon name={item.icon} class="size-6" />
+
+							<span class="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background group-hover/nav:block group-focus-visible/nav:block">
+								{item.label}
+							</span>
+
+							<span class="sr-only">{item.label}</span>
+						</a>
+					</li>
+				))
+			}
+
+			<li class={DOCK_ITEM}>
+				<NotesMenu locale={locale} path={path} />
+			</li>
+
+			{
+				trailing.map((item) => (
+					<li class={DOCK_ITEM}>
+						<a
+							href={getRelativeLocaleUrl(locale, item.href)}
+							aria-current={isActive(item.href) ? 'page' : undefined}
+							class:list={[
+								'group/nav relative inline-flex size-12 shrink-0 items-center justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+								isActive(item.href) && 'bg-muted text-foreground'
+							]}
+						>
+							<Icon name={item.icon} class="size-6" />
+
+							<span class="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background group-hover/nav:block group-focus-visible/nav:block">
+								{item.label}
+							</span>
+
+							<span class="sr-only">{item.label}</span>
+						</a>
+					</li>
+				))
+			}
+
+			<li class={DOCK_ITEM}>
+				<SettingsMenu locale={locale} path={path} />
+			</li>
+		</ul>
+	</nav>
+
+	<ProgressiveBlur height="70%" />
+</div>

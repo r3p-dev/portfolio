@@ -1,0 +1,61 @@
+---
+title: Personal Portfolio Website
+description: The site you are reading. A content-first portfolio built with Astro, TypeScript, and Tailwind CSS — statically rendered, bilingual, and served from a single Node process that also runs the guestbook.
+date: '2026-05-25'
+updated: '2026-08-31'
+tags: [astro, typescript, tailwindcss, mdx, i18n, seo, portfolio]
+cover: ../../assets/projects/portfolio.png
+repository: https://github.com/r3p-dev/portfolio
+demo: https://r3p.dev
+---
+
+# Introduction
+
+This site. A personal portfolio built with Astro, TypeScript, and Tailwind CSS, designed around content rather than around a component library.
+
+It is a rebuild. The previous version was SvelteKit and MDsveX; this one trades a client-side framework for static output, and keeps a server only where a server is genuinely required.
+
+# Overview
+
+Almost every route is prerendered at build time. Blog posts, projects, tag pages and the home page are plain HTML by the time they reach a browser, with no hydration step and no framework runtime shipped to the client.
+
+The guestbook is the single exception. It accepts form submissions and reads a database on each request, so it opts out of prerendering and is handled by a Node server. That one route is the entire reason the deployment is a container rather than a folder of files.
+
+Interactivity elsewhere — the theme toggle, the copy-code buttons, the table-of-contents highlight, the image lightbox — is written as small vanilla scripts. No React, no Svelte, no islands.
+
+# Features
+
+## Content Collections
+
+Blog posts and projects are typed content collections validated with Zod at build time. A malformed date or a missing description fails the build rather than rendering wrong.
+
+## Markdown Pipeline
+
+A custom unified processor handles content: headings are demoted so a post's `#` becomes a page `h2`, anchors are generated and linked, wide tables are wrapped so they scroll instead of overflowing, and code blocks are wrapped for the copy button. Shiki renders syntax highlighting at build time in both light and dark themes.
+
+## Bilingual Routing
+
+English is served unprefixed and Indonesian lives under `/id`, generated from the same components. Copy lives in typed message catalogues keyed off the English one, so a missing Indonesian string is a compile error rather than a blank space in production.
+
+## SEO Layer
+
+Metadata, canonical URLs, Open Graph tags, and JSON-LD are built from one configuration module. Every page produces a structured-data graph — Person, WebSite, WebPage, BreadcrumbList, and BlogPosting where it applies — and the sitemap takes its `lastmod` values from content frontmatter rather than from file timestamps.
+
+## Guestbook
+
+A form, a SQLite table, and no accounts. Validation, a honeypot field, and a duplicate guard run server-side; the database is `node:sqlite` from the standard library, so the feature adds no dependency at all.
+
+# Tech Stack
+
+Astro
+TypeScript
+Tailwind CSS
+MDX
+Shiki
+SQLite via `node:sqlite`
+
+# Structure Philosophy
+
+Components are organised as atoms, molecules and organisms, with page-level components kept separate from the routes that render them. Routes stay thin — they resolve params and hand off — so the English and Indonesian versions of a page share one implementation instead of drifting apart.
+
+The same instinct governs the dependency list. Static output, standard-library SQLite, and hand-written scripts instead of libraries mean there is very little here that can rot.

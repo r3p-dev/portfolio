@@ -1,0 +1,106 @@
+---
+import {
+	SITE,
+	OG_LOCALES,
+	absolute,
+	alternates,
+	canonical,
+	pageTitle,
+	type PageSeo
+} from '@lib/seo'
+import { defaultLocale, locales } from '@lib/i18n'
+
+interface Props {
+	seo: PageSeo
+}
+
+const { seo } = Astro.props
+
+const locale = seo.locale ?? defaultLocale
+const href = canonical(seo.path, locale)
+const image = absolute(seo.image ?? SITE.ogImage.path)
+const imageAlt = seo.imageAlt ?? `${SITE.name} — ${SITE.author}`
+
+const isDefaultImage = (seo.image ?? SITE.ogImage.path) === SITE.ogImage.path
+
+const robots = seo.noindex
+	? 'noindex, follow'
+	: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+
+const localeLinks = seo.noindex ? [] : alternates(seo.path)
+
+const otherLocales = locales.filter((code) => code !== locale)
+
+const jsonLd = seo.jsonLd?.length
+	? JSON.stringify({
+			'@context': 'https://schema.org',
+			'@graph': seo.jsonLd
+		}).replace(/</g, '\\u003c')
+	: null
+---
+
+<title>{pageTitle(seo.title)}</title>
+<meta name="description" content={seo.description} />
+<meta name="author" content={SITE.author} />
+<meta name="robots" content={robots} />
+<link rel="canonical" href={href} />
+
+{
+	localeLinks.map(({ hreflang, href: alternate }) => (
+		<link rel="alternate" hreflang={hreflang} href={alternate} />
+	))
+}
+
+{seo.prev && <link rel="prev" href={canonical(seo.prev, locale)} />}
+{seo.next && <link rel="next" href={canonical(seo.next, locale)} />}
+
+<meta property="og:type" content={seo.type ?? 'website'} />
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:locale" content={OG_LOCALES[locale]} />
+{
+	otherLocales.map((code) => (
+		<meta property="og:locale:alternate" content={OG_LOCALES[code]} />
+	))
+}
+<meta property="og:url" content={href} />
+<meta property="og:title" content={seo.title} />
+<meta property="og:description" content={seo.description} />
+<meta property="og:image" content={image} />
+<meta property="og:image:alt" content={imageAlt} />
+{
+	isDefaultImage && (
+		<>
+			<meta property="og:image:type" content={SITE.ogImage.type} />
+			<meta property="og:image:width" content={String(SITE.ogImage.width)} />
+			<meta property="og:image:height" content={String(SITE.ogImage.height)} />
+		</>
+	)
+}
+
+{
+	seo.type === 'article' && (
+		<>
+			<meta property="article:author" content={SITE.author} />
+			{seo.published && (
+				<>
+					<meta property="article:published_time" content={seo.published} />
+					<meta
+						property="article:modified_time"
+						content={seo.modified ?? seo.published}
+					/>
+				</>
+			)}
+			{(seo.tags ?? []).map((tag) => (
+				<meta property="article:tag" content={tag} />
+			))}
+		</>
+	)
+}
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={seo.title} />
+<meta name="twitter:description" content={seo.description} />
+<meta name="twitter:image" content={image} />
+<meta name="twitter:image:alt" content={imageAlt} />
+
+{jsonLd && <script type="application/ld+json" is:inline set:html={jsonLd} />}

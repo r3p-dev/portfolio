@@ -1,0 +1,24 @@
+---
+import Guestbook from '@components/pages/guestbook.astro'
+import { defaultLocale } from '@lib/i18n'
+import { EMPTY_STATE, handleSubmission } from '@lib/server'
+
+export const prerender = false
+
+let state = EMPTY_STATE
+
+if (Astro.request.method === 'POST') {
+	const result = await handleSubmission(
+		Astro.request,
+		`${Astro.url.pathname}?signed=1#entries`
+	)
+
+	if (result instanceof Response) return result
+
+	state = result
+}
+
+const signed = Astro.url.searchParams.has('signed')
+---
+
+<Guestbook locale={defaultLocale} state={state} signed={signed} />

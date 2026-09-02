@@ -1,0 +1,76 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { getEntry, render } from 'astro:content'
+
+import { AppLayout } from '@components/layouts'
+import CodeCopy from '@components/code-copy.astro'
+import {
+	canonical as canonicalUrl,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { formatDate, isoDay } from '@lib/content'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+
+const entry = (await getEntry('now', locale)) ?? (await getEntry('now', 'en'))
+
+if (!entry) throw new Error('The `now` collection has no entry to render')
+
+const { Content } = await render(entry)
+
+const updated = entry.data.updatedAt
+const title = `${t('now_title')} — r3p.dev`
+const description = t('now_lead')
+const canonical = canonicalUrl('/now', locale)
+
+const seo: PageSeo = {
+	path: '/now',
+	locale,
+	title,
+	description,
+	modified: isoDay(updated),
+	jsonLd: [
+		...schema.siteNodes(description),
+		schema.webPage({
+			canonical,
+			name: title,
+			description,
+			breadcrumb: true,
+			dateModified: isoDay(updated)
+		}),
+		schema.breadcrumbList(canonical, [
+			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+			{ name: t('now_title'), path: getRelativeLocaleUrl(locale, '/now') }
+		])
+	]
+}
+---
+
+<AppLayout seo={seo}>
+	<div class="space-y-8">
+		<div class="space-y-4">
+			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+				{t('now_title')}
+			</h1>
+			<p class="text-muted-foreground">{t('now_lead')}</p>
+			<p class="text-sm text-muted-foreground">
+				<time datetime={isoDay(updated)}>
+					{t('now_updated', { date: formatDate(updated, locale) })}
+				</time>
+			</p>
+		</div>
+
+		<div class="prose max-w-none leading-relaxed text-muted-foreground">
+			<Content />
+		</div>
+	</div>
+
+	<CodeCopy locale={locale} />
+</AppLayout>

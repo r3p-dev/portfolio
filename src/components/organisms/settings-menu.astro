@@ -1,0 +1,145 @@
+---
+import { Icon } from '@components/atoms'
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { locales, useTranslations, type Locale } from '@lib/i18n'
+
+interface Props {
+	locale: Locale
+	path: string
+}
+
+const { locale, path } = Astro.props
+const t = useTranslations(locale)
+
+const THEMES = ['system', 'light', 'dark'] as const
+
+const themeLabels: Record<(typeof THEMES)[number], string> = {
+	system: t('settings_theme_system'),
+	light: t('settings_theme_light'),
+	dark: t('settings_theme_dark')
+}
+
+const LOCALE_LABELS: Record<Locale, string> = {
+	en: t('settings_language_en'),
+	id: t('settings_language_id')
+}
+---
+
+<details class="settings group/menu relative">
+	<summary
+		class="group/nav relative inline-flex size-12 shrink-0 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 group-open/menu:bg-muted group-open/menu:text-foreground"
+		aria-label={t('nav_settings')}
+	>
+		<Icon name="settings" class="size-6" />
+
+		<span
+			class="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background group-hover/nav:block group-focus-visible/nav:block group-open/menu:hidden!"
+		>
+			{t('nav_settings')}
+		</span>
+	</summary>
+
+	<div
+		class="absolute bottom-full left-1/2 z-50 mb-3 w-56 -translate-x-1/2 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
+	>
+		<p class="px-2 py-1.5 text-sm font-semibold">{t('settings_title')}</p>
+
+		<p
+			class="px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+			id="settings-theme-label"
+		>
+			{t('settings_theme')}
+		</p>
+		<div role="group" aria-labelledby="settings-theme-label">
+			{
+				THEMES.map((option) => (
+					<button
+						type="button"
+						data-theme-option={option}
+						aria-pressed="false"
+						class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+					>
+						{themeLabels[option]}
+						<Icon name="check" class="size-4 opacity-0" />
+					</button>
+				))
+			}
+		</div>
+
+		<p
+			class="px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+			id="settings-language-label"
+		>
+			{t('settings_language')}
+		</p>
+		<div role="group" aria-labelledby="settings-language-label">
+			{
+				locales.map((option) => (
+					<a
+						href={getRelativeLocaleUrl(option, path)}
+						hreflang={option}
+						lang={option}
+						aria-current={locale === option ? 'true' : undefined}
+						class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+					>
+						{LOCALE_LABELS[option]}
+						{locale === option && <Icon name="check" class="size-4" />}
+					</a>
+				))
+			}
+		</div>
+	</div>
+</details>
+
+<script>
+	const menu = document.querySelector<HTMLDetailsElement>('details.settings')
+	if (menu) {
+		const buttons = menu.querySelectorAll<HTMLButtonElement>(
+			'[data-theme-option]'
+		)
+
+		function markChecked(theme: string) {
+			for (const button of buttons) {
+				const checked = button.dataset.themeOption === theme
+				button.setAttribute('aria-pressed', String(checked))
+				button.querySelector('svg')?.classList.toggle('opacity-0', !checked)
+			}
+		}
+
+		function apply(theme: string) {
+			const dark =
+				theme === 'dark' ||
+				(theme === 'system' &&
+					matchMedia('(prefers-color-scheme: dark)').matches)
+			document.documentElement.classList.toggle('dark', dark)
+		}
+
+		let stored = 'dark'
+		try {
+			stored = localStorage.getItem('theme') ?? 'dark'
+		} catch {}
+		markChecked(stored)
+
+		for (const button of buttons) {
+			button.addEventListener('click', () => {
+				const theme = button.dataset.themeOption!
+				try {
+					localStorage.setItem('theme', theme)
+				} catch {}
+				apply(theme)
+				markChecked(theme)
+			})
+		}
+
+		document.addEventListener('pointerdown', (event) => {
+			if (menu.open && !menu.contains(event.target as Node)) menu.open = false
+		})
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && menu.open) {
+				menu.open = false
+				menu.querySelector('summary')?.focus()
+			}
+		})
+	}
+</script>

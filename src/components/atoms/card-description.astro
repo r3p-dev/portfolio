@@ -1,0 +1,14 @@
+---
+interface Props {
+	class?: string
+	[key: string]: unknown
+}
+
+const { class: className = '', ...rest }: Props = Astro.props
+
+const BASE = 'text-sm text-muted-foreground'
+---
+
+<p data-slot="card-description" class={`${BASE} ${className}`} {...rest}>
+	<slot />
+</p>

@@ -1,0 +1,47 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { useTranslations, type Locale } from '@lib/i18n'
+import type { Blog } from '@lib/content'
+import { EntryCard } from '@components/molecules'
+import Pagination from './pagination.astro'
+
+interface Props {
+	blogs: Blog[]
+	page: number
+	totalPages: number
+	total: number
+	locale: Locale
+}
+
+const { blogs, page, totalPages, total, locale } = Astro.props
+const t = useTranslations(locale)
+
+const countLabel =
+	total === 1
+		? t('blogs_post_count_one', { count: total })
+		: t('blogs_post_count_other', { count: total })
+---
+
+<div class="space-y-6">
+	<p class="text-sm text-muted-foreground">
+		{countLabel}{' '}
+		{totalPages > 1 && <>· {t('blogs_page_of', { page, total: totalPages })}</>}
+	</p>
+
+	<ul class="space-y-4">
+		{
+			blogs.map((blog) => (
+				<EntryCard
+					href={getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)}
+					title={blog.data.title}
+					description={blog.data.description}
+					date={blog.data.date}
+					tags={blog.data.tags.slice(0, 4)}
+					locale={locale}
+				/>
+			))
+		}
+	</ul>
+
+	<Pagination page={page} totalPages={totalPages} locale={locale} />
+</div>

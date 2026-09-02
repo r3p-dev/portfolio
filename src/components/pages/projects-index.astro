@@ -1,0 +1,129 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { Image } from 'astro:assets'
+
+import { AppLayout } from '@components/layouts'
+import {
+	Card,
+	Badge,
+	WipBadge,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle
+} from '@components/atoms'
+import {
+	canonical as canonicalUrl,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { allProjects } from '@lib/content'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+
+const projects = await allProjects()
+
+const title = `${t('page_projects_title')} — r3p.dev`
+const description =
+	'Things I have designed, built, and shipped — web applications, operations platforms, and the infrastructure that runs them.'
+const canonical = canonicalUrl('/projects', locale)
+
+const seo: PageSeo = {
+	path: '/projects',
+	locale,
+	title,
+	description,
+	jsonLd: [
+		...schema.siteNodes(description),
+		schema.webPage({
+			canonical,
+			name: title,
+			description,
+			alsoTypes: ['CollectionPage'],
+			breadcrumb: true
+		}),
+		schema.breadcrumbList(canonical, [
+			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+			{
+				name: t('page_projects_title'),
+				path: getRelativeLocaleUrl(locale, '/projects')
+			}
+		]),
+		schema.itemList(
+			canonical,
+			projects.map((project) => ({
+				name: project.data.title,
+				path: getRelativeLocaleUrl(locale, `/projects/${project.id}`)
+			}))
+		)
+	]
+}
+---
+
+<AppLayout seo={seo}>
+	<div class="space-y-12">
+		<div class="space-y-4">
+			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+				{t('page_projects_title')}
+			</h1>
+			<p class="text-muted-foreground">{t('projects_lead')}</p>
+		</div>
+
+		<ul class="grid gap-6 md:grid-cols-2">
+			{
+				projects.map((project) => {
+					const image = project.data.cover
+
+					return (
+						<li>
+							<a
+								href={getRelativeLocaleUrl(locale, `/projects/${project.id}`)}
+								class="group block h-full"
+							>
+								<Card class="h-full pt-0">
+									<div class="relative h-60 w-full overflow-hidden bg-muted">
+										{image && (
+											<Image
+												src={image}
+												widths={[384, 640, 1024]}
+												sizes="(max-width: 640px) 100vw, 512px"
+												loading="lazy"
+												alt={project.data.title}
+												class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+											/>
+										)}
+									</div>
+
+									<CardHeader>
+										<CardTitle as="h2" class="flex items-center gap-2 text-lg">
+											{project.data.title}
+											{project.data.wip && <WipBadge locale={locale} />}
+										</CardTitle>
+										<CardDescription class="line-clamp-2">
+											{project.data.description}
+										</CardDescription>
+									</CardHeader>
+
+									<CardContent>
+										<div class="flex flex-wrap gap-2">
+											{project.data.tags.slice(0, 4).map((tag) => (
+												<Badge variant="secondary">{tag}</Badge>
+											))}
+										</div>
+									</CardContent>
+								</Card>
+							</a>
+						</li>
+					)
+				})
+			}
+
+		</ul>
+	</div>
+</AppLayout>

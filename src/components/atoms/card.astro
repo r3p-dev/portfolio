@@ -1,0 +1,16 @@
+---
+interface Props {
+	as?: 'div' | 'article' | 'section' | 'li'
+	class?: string
+	[key: string]: unknown
+}
+
+const { as: Tag = 'div', class: className = '', ...rest }: Props = Astro.props
+
+const BASE =
+	'group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-[>img:first-child]:pt-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl'
+---
+
+<Tag data-slot="card" class={`${BASE} ${className}`} {...rest}>
+	<slot />
+</Tag>

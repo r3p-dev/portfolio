@@ -1,0 +1,325 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { Image } from 'astro:assets'
+
+import { AppLayout } from '@components/layouts'
+import {
+	Icon,
+	Card,
+	Badge,
+	Button,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle
+} from '@components/atoms'
+
+import logo from '@assets/logo.png'
+import {
+	SITE,
+	ORIGIN,
+	canonical as canonicalUrl,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { allBlogs, allProjects, formatDate } from '@lib/content'
+import { experiences, skills, socials } from '@lib/site-content'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+
+const projects = (await allProjects()).slice(0, 2)
+const blogs = (await allBlogs()).slice(0, 3)
+
+const description = `Portfolio of ${SITE.author} — projects, writing on infrastructure and web development, and contact.`
+const canonical = canonicalUrl('/', locale)
+
+const seo: PageSeo = {
+	path: '/',
+	locale,
+	title: `${SITE.author} — ${t('home_role')}`,
+	description,
+	type: 'profile',
+	jsonLd: [
+		...schema.siteNodes(description),
+		schema.webPage({
+			canonical,
+			name: SITE.name,
+			description,
+			alsoTypes: ['ProfilePage'],
+			mainEntity: { '@id': `${ORIGIN}/#person` }
+		})
+	]
+}
+---
+
+<AppLayout seo={seo}>
+	<section class="py-5">
+		<div
+			class="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between"
+		>
+			<div class="space-y-4">
+				<div class="flex items-center gap-4">
+					<Image
+						src={logo}
+						alt={`${SITE.name} logo`}
+						width={56}
+						height={56}
+						loading="eager"
+						class="brand-logo size-14"
+					/>
+					<span class="text-muted-foreground font-medium">{SITE.name}</span>
+				</div>
+
+				<div class="space-y-1.5">
+					<h1
+						class="text-3xl font-bold tracking-tight whitespace-nowrap text-foreground sm:text-4xl"
+					>
+						{SITE.author}
+					</h1>
+					<p class="text-base font-medium text-primary sm:text-lg md:text-xl">
+						{t('home_role')}{' '}
+					</p>
+					<p
+						class="flex items-center gap-1.5 text-sm text-muted-foreground sm:text-base"
+					>
+						<Icon name="map-pin" class="size-4" />
+						{t('home_location')}
+					</p>
+				</div>
+			</div>
+
+			<ul class="flex flex-row gap-2 sm:gap-3">
+				{
+					socials.map((social) => (
+						<li>
+							<a
+								href={social.href}
+								target="_blank"
+								rel={social.me ? 'me external noopener' : 'external noopener'}
+								class:list={[
+									'inline-flex size-11 cursor-pointer items-center justify-center rounded-xl border border-input transition-all duration-200 hover:scale-105 hover:shadow-md sm:size-12',
+									social.classes
+								]}
+								aria-label={social.label}
+							>
+								<Icon name={social.icon} class="size-5" />
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</div>
+
+		<div class="mt-15 space-y-4 text-muted-foreground text-justify">
+			<p>
+				{t('home_about_p1_pre')}
+				<strong class="font-medium text-foreground">{SITE.name}</strong>{
+					t('home_about_p1_post')
+				}
+			</p>
+			<p>{t('home_about_p2')}</p>
+		</div>
+	</section>
+
+	<div class="mb-12 my-6 border-t border-border md:mb-16 md:my-6"></div>
+
+	<section class="py-5" aria-labelledby="experiences-heading">
+		<div>
+			<h2
+				id="experiences-heading"
+				class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
+			>
+				{t('home_experiences_heading')}
+			</h2>
+			<p class="mt-4 text-muted-foreground">{t('home_experiences_lead')}</p>
+		</div>
+
+		<ol class="mt-8">
+			{
+				experiences.map((experience) => (
+					<li class="border-b border-border pb-6 last:border-b-0 last:pb-0 not-first:pt-6">
+						<div class="flex flex-wrap items-baseline gap-x-2">
+							<span class="font-medium text-foreground">{experience.role}</span>
+							<span class="text-muted-foreground/50" aria-hidden="true">
+								·
+							</span>
+							<span class="text-muted-foreground">{experience.company}</span>
+						</div>
+
+						<p class="mt-1 text-xs text-muted-foreground/70">
+							{experience.duration}
+						</p>
+
+						<p class="mt-2.5 text-sm leading-relaxed text-muted-foreground">
+							{experience.contributions}
+						</p>
+					</li>
+				))
+			}
+		</ol>
+	</section>
+
+	<div class="mb-12 my-6 border-t border-border md:mb-16 md:my-6"></div>
+
+	<section class="py-5" aria-labelledby="skills-heading">
+		<h3 class="text-lg font-semibold text-foreground">
+			{t('home_skills_heading')}
+		</h3>
+		<div class="mt-6 space-y-6">
+			{
+				skills.map((group) => (
+					<div>
+						<h4 class="text-sm font-medium text-muted-foreground">
+							{group.category}
+						</h4>
+						<ul class="mt-2 flex flex-wrap gap-2">
+							{group.items.map((skill) => (
+								<li class="rounded-lg border border-border bg-secondary px-3 py-1 text-sm text-foreground">
+									{skill}
+								</li>
+							))}
+						</ul>
+					</div>
+				))
+			}
+		</div>
+	</section>
+
+	<div class="mb-12 my-6 border-t border-border md:mb-16 md:my-6"></div>
+
+	<section class="py-5" aria-labelledby="projects-heading">
+		<div class="space-y-8">
+			<div
+				class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
+			>
+				<div>
+					<h2
+						id="projects-heading"
+						class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
+					>
+						{t('home_projects_heading')}
+					</h2>
+					<p class="mt-2 text-muted-foreground">{t('home_projects_lead')}</p>
+				</div>
+				<Button
+					href={getRelativeLocaleUrl(locale, '/projects')}
+					variant="outline"
+					class="w-fit gap-2 text-foreground"
+				>
+					{t('home_view_all')}
+					<Icon name="arrow-right" class="size-4" />
+				</Button>
+			</div>
+
+			<ul class="grid gap-6 md:grid-cols-2">
+				{
+					projects.map((project) => (
+						<li>
+							<a
+								href={getRelativeLocaleUrl(locale, `/projects/${project.id}`)}
+								class="group block h-full"
+							>
+								<Card class="h-full">
+									<CardHeader>
+										<CardTitle as="h3" class="text-lg">
+											{project.data.title}
+										</CardTitle>
+										<CardDescription class="line-clamp-2">
+											{project.data.description}
+										</CardDescription>
+									</CardHeader>
+
+									<CardContent class="space-y-4">
+										<div class="flex flex-wrap gap-2">
+											{project.data.tags.slice(0, 4).map((tag) => (
+												<Badge variant="secondary">{tag}</Badge>
+											))}
+										</div>
+									</CardContent>
+								</Card>
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</div>
+	</section>
+
+	<div class="mb-12 my-6 border-t border-border md:mb-16 md:my-6"></div>
+
+	<section class="py-5" aria-labelledby="blogs-heading">
+		<div class="space-y-8">
+			<div
+				class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
+			>
+				<div>
+					<h2
+						id="blogs-heading"
+						class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
+					>
+						{t('home_blogs_heading')}
+					</h2>
+					<p class="mt-2 text-muted-foreground">{t('home_blogs_lead')}</p>
+				</div>
+				<Button
+					href={getRelativeLocaleUrl(locale, '/blogs')}
+					variant="outline"
+					class="w-fit gap-2 text-foreground"
+				>
+					{t('home_view_all')}
+					<Icon name="arrow-right" class="size-4" />
+				</Button>
+			</div>
+
+			<ul class="space-y-4">
+				{
+					blogs.map((blog) => (
+						<li>
+							<a
+								href={getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)}
+								class="group block"
+							>
+								<Card>
+									<CardHeader>
+										<CardTitle as="h3" class="line-clamp-1 text-lg">
+											{blog.data.title}
+										</CardTitle>
+
+										<div class="flex flex-col gap-2">
+											<div class="flex items-center gap-3 text-sm text-muted-foreground">
+												<Icon name="calendar" class="size-4" />
+												<time datetime={blog.data.date.toISOString()}>
+													{formatDate(blog.data.date, locale)}
+												</time>
+											</div>
+										</div>
+
+										<CardDescription class="line-clamp-1">
+											{blog.data.description}
+										</CardDescription>
+									</CardHeader>
+
+									<CardContent>
+										<div class="flex flex-wrap gap-2">
+											{blog.data.tags.slice(0, 4).map((tag) => (
+												<Badge variant="secondary">{tag}</Badge>
+											))}
+										</div>
+									</CardContent>
+								</Card>
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</div>
+	</section>
+
+	<div class="mb-12 my-6 border-t border-border md:mb-16 md:my-6"></div>
+</AppLayout>

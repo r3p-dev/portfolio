@@ -1,0 +1,52 @@
+---
+import {
+	Badge,
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+	Icon
+} from '@components/atoms'
+import { formatDate } from '@lib/content'
+import type { Locale } from '@lib/i18n'
+
+interface Props {
+	href: string
+	title: string
+	description: string
+	date: Date
+	tags: readonly string[]
+	locale: Locale
+	clamp?: 1 | 2
+}
+
+const { href, title, description, date, tags, locale, clamp = 2 } = Astro.props
+---
+
+<li>
+	<a href={href} class="group block">
+		<Card>
+			<CardHeader>
+				<CardTitle as="h2" class="line-clamp-2 text-lg">{title}</CardTitle>
+
+				<div class="flex items-center gap-3 text-sm text-muted-foreground">
+					<Icon name="calendar" class="size-4" />
+					<time datetime={date.toISOString()}>{formatDate(date, locale)}</time>
+				</div>
+
+				<CardDescription
+					class={`${clamp === 1 ? 'line-clamp-1' : 'line-clamp-2'}`}
+				>
+					{description}
+				</CardDescription>
+			</CardHeader>
+
+			<CardContent>
+				<div class="flex flex-wrap gap-2">
+					{tags.map((tag) => <Badge variant="secondary">{tag}</Badge>)}
+				</div>
+			</CardContent>
+		</Card>
+	</a>
+</li>

@@ -1,0 +1,158 @@
+---
+import type { MarkdownHeading } from 'astro'
+import { TocList } from '@components/molecules'
+import { buildToc } from '@lib/content'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { Icon } from '@components/atoms'
+
+interface Props {
+	headings: MarkdownHeading[]
+	locale: Locale
+}
+
+const { headings, locale } = Astro.props
+const t = useTranslations(locale)
+
+const tree = buildToc(headings)
+---
+
+{
+	tree.length > 0 && (
+		<>
+			<aside class="hidden 2xl:block">
+				<nav
+					data-toc
+					aria-label={t('blogs_toc')}
+					class="fixed top-20 right-4 max-h-[calc(100vh-7rem)] w-56 overflow-y-auto"
+				>
+					<div class="mb-3 border-b border-border pb-2">
+						<p class="text-base font-semibold tracking-wider text-muted-foreground uppercase">
+							{t('blogs_toc')}
+						</p>
+					</div>
+
+					<TocList nodes={tree} />
+				</nav>
+			</aside>
+
+			<div class="fixed top-0 right-0 left-0 z-40 border-b bg-background/70 backdrop-blur-xl 2xl:hidden">
+				<details aria-label={t('blogs_toc')}>
+					<summary class="flex w-full cursor-pointer list-none items-center justify-between gap-4 bg-popover px-4 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:px-6 md:px-8 [&::-webkit-details-marker]:hidden">
+						<span class="flex min-w-0 flex-col">
+							<span class="text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
+								{t('blogs_toc')}
+							</span>
+							<span
+								data-toc-current
+								class="truncate text-sm font-medium text-foreground"
+							>
+								{headings[0]?.text}
+							</span>
+						</span>
+
+						<span class="shrink-0 rounded-md border px-2 py-1 text-xs text-muted-foreground">
+							<Icon name="menu-2" class="size-4" title={t('blogs_toc_open')} />
+						</span>
+					</summary>
+
+					<div
+						data-toc
+						class="max-h-[70vh] overflow-y-auto bg-popover px-4 pb-4 sm:px-6 md:px-8"
+					>
+						<TocList nodes={tree} />
+					</div>
+				</details>
+			</div>
+		</>
+	)
+}
+
+<script>
+	const anchors = Array.from(
+		document.querySelectorAll<HTMLAnchorElement>('[data-toc] a[href^="#"]')
+	)
+
+	if (anchors.length) {
+		const label = document.querySelector<HTMLElement>('[data-toc-current]')
+
+		const headings = Array.from(
+			document.querySelectorAll<HTMLElement>(
+				'.prose :is(h2, h3, h4, h5, h6)[id]'
+			)
+		)
+
+		const bySlug = new Map<string, HTMLAnchorElement[]>()
+
+		for (const anchor of anchors) {
+			const slug = decodeURIComponent(anchor.hash.slice(1))
+			const group = bySlug.get(slug)
+
+			if (group) group.push(anchor)
+			else bySlug.set(slug, [anchor])
+		}
+
+		let current = ''
+
+		function mark(slug: string) {
+			if (slug === current) return
+
+			for (const anchor of bySlug.get(current) ?? []) {
+				anchor.removeAttribute('aria-current')
+			}
+
+			const group = bySlug.get(slug) ?? []
+
+			for (const anchor of group) {
+				anchor.setAttribute('aria-current', 'location')
+			}
+
+			if (label && group.length) {
+				label.textContent = group[0]?.textContent?.trim() ?? ''
+			}
+
+			current = slug
+		}
+
+		function sync() {
+			const line = 80
+			let active = headings[0]
+
+			for (const heading of headings) {
+				if (heading.getBoundingClientRect().top > line) break
+				active = heading
+			}
+
+			const atBottom =
+				window.innerHeight + window.scrollY >= document.body.scrollHeight - 2
+
+			if (atBottom) active = headings[headings.length - 1]
+
+			if (active) mark(active.id)
+		}
+
+		let queued = false
+
+		function schedule() {
+			if (queued) return
+
+			queued = true
+			requestAnimationFrame(() => {
+				queued = false
+				sync()
+			})
+		}
+
+		if (headings.length) {
+			addEventListener('scroll', schedule, { passive: true })
+			addEventListener('resize', schedule, { passive: true })
+			sync()
+		}
+
+		for (const anchor of anchors) {
+			anchor.addEventListener('click', () => {
+				mark(decodeURIComponent(anchor.hash.slice(1)))
+				anchor.closest('details')?.removeAttribute('open')
+			})
+		}
+	}
+</script>

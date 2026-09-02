@@ -1,0 +1,26 @@
+---
+import { Icon } from '@components/atoms'
+
+interface Props {
+	class?: string
+}
+
+const { class: className = '' } = Astro.props
+---
+
+<details class={`group/disclosure ${className}`}>
+	<summary
+		class="group/disclosure-trigger relative flex cursor-pointer list-none items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-lg font-semibold text-foreground transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
+	>
+		<slot name="summary" />
+
+		<Icon
+			name="chevron-down"
+			class="ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open/disclosure:rotate-180"
+		/>
+	</summary>
+
+	<div class="overflow-hidden pt-0 pb-2.5 text-sm">
+		<slot />
+	</div>
+</details>

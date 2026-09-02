@@ -1,0 +1,17 @@
+---
+import type { GetStaticPaths } from 'astro'
+
+import ProjectDetail from '../../components/pages/project-detail.astro'
+import { allProjects } from '../../lib/content/utils'
+import { defaultLocale } from '@lib/i18n'
+
+export const getStaticPaths = (async () => {
+	const projects = await allProjects()
+
+	return projects.map((project) => ({ params: { slug: project.id }, props: { project } }))
+}) satisfies GetStaticPaths
+
+const { project } = Astro.props
+---
+
+<ProjectDetail locale={defaultLocale} project={project} />

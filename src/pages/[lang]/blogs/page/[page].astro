@@ -1,0 +1,25 @@
+---
+import type { GetStaticPaths } from 'astro'
+
+import BlogsPage from '../../../../components/pages/blogs-page.astro'
+import { allBlogs, blogPage, totalPages } from '../../../../lib/content/utils'
+import { langParams } from '../../../../lib/routes'
+
+export const getStaticPaths = (async () => {
+	const blogs = await allBlogs()
+	const pages = totalPages(blogs.length)
+
+	const numbers = Array.from({ length: Math.max(0, pages - 1) }, (_, index) => index + 2)
+
+	return langParams().flatMap(({ params, props }) =>
+		numbers.map((page) => ({
+			params: { ...params, page: String(page) },
+			props: { ...props, ...blogPage(blogs, page) }
+		}))
+	)
+}) satisfies GetStaticPaths
+
+const { locale, blogs, page, totalPages: pages, total } = Astro.props
+---
+
+<BlogsPage locale={locale} blogs={blogs} page={page} totalPages={pages} total={total} />

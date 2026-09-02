@@ -1,0 +1,137 @@
+---
+import { getImage } from 'astro:assets'
+
+import { toLocale, useTranslations, type Locale } from '@lib/i18n'
+
+interface ImageInput {
+	src: ImageMetadata
+	alt: string
+}
+
+interface Props {
+	src?: ImageMetadata
+	alt?: string
+	images?: ImageInput[]
+	caption?: string
+	class?: string
+	priority?: boolean
+	locale?: Locale
+}
+
+const props = Astro.props
+
+const inputs: ImageInput[] =
+	props.images ??
+	(props.src && props.alt ? [{ src: props.src, alt: props.alt }] : [])
+
+if (inputs.length === 0) {
+	throw new Error(
+		'BlogImage needs either `src` + `alt` or a non-empty `images` array'
+	)
+}
+
+const locale = props.locale ?? toLocale(Astro.currentLocale)
+const t = useTranslations(locale)
+
+const single = inputs.length === 1
+
+const sizes = single
+	? '(min-width: 48rem) 42rem, 100vw'
+	: '(min-width: 48rem) 21rem, 50vw'
+
+const spanFirst = !single && inputs.length % 2 === 1
+
+const THUMB_WIDTHS = [480, 960, 1440]
+const FULL_WIDTH = 1920
+
+const images = await Promise.all(
+	inputs.map(async (input) => {
+		const widths = THUMB_WIDTHS.filter((width) => width <= input.src.width)
+		if (widths.length === 0) widths.push(input.src.width)
+
+		const fullWidth = Math.min(FULL_WIDTH, input.src.width)
+
+		const [thumb, full] = await Promise.all([
+			getImage({ src: input.src, widths, format: 'webp' }),
+			getImage({ src: input.src, width: fullWidth, format: 'webp' })
+		])
+
+		return {
+			alt: input.alt,
+			thumb: {
+				src: thumb.src,
+				srcSet: thumb.srcSet.attribute,
+				width: input.src.width,
+				height: input.src.height
+			},
+			full: {
+				src: full.src,
+				width: fullWidth,
+				height: Math.round(input.src.height * (fullWidth / input.src.width))
+			}
+		}
+	})
+)
+---
+
+<figure class="not-prose my-6" data-blog-image>
+	<div class:list={[!single && 'grid grid-cols-2 gap-2']}>
+		{
+			images.map((image, index) => (
+				<button
+					type="button"
+					data-blog-image-trigger
+					data-full-src={image.full.src}
+					data-full-width={image.full.width}
+					data-full-height={image.full.height}
+					data-alt={image.alt}
+					aria-label={`${image.alt} (${t('image_view_full')})`}
+					class:list={[
+						'block cursor-zoom-in rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+						single
+							? 'w-full'
+							: 'overflow-hidden border border-border',
+						!single &&
+							(spanFirst && index === 0
+								? 'col-span-2 aspect-video'
+								: 'aspect-4/3')
+					]}
+				>
+					<img
+						src={image.thumb.src}
+						srcset={image.thumb.srcSet}
+						sizes={sizes}
+						width={image.thumb.width}
+						height={image.thumb.height}
+						alt={image.alt}
+						loading={props.priority && index === 0 ? 'eager' : 'lazy'}
+						fetchpriority={
+							props.priority && index === 0 ? 'high' : undefined
+						}
+						decoding="async"
+						class:list={[
+							single
+								? 'w-full rounded-xl border border-border object-cover'
+								: 'h-full w-full object-cover',
+							props.class
+						]}
+					/>
+				</button>
+			))
+		}
+	</div>
+
+	{
+		props.caption && (
+			<figcaption
+				class:list={[
+					single
+						? 'mt-2 text-center text-sm text-pretty text-muted-foreground'
+						: 'sr-only'
+				]}
+			>
+				{props.caption}
+			</figcaption>
+		)
+	}
+</figure>

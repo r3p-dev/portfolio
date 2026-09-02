@@ -1,0 +1,118 @@
+---
+import { Button, Icon } from '@components/atoms'
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { useTranslations, type Locale } from '@lib/i18n'
+
+interface Props {
+	page: number
+	totalPages: number
+	locale: Locale
+}
+
+const { page, totalPages, locale } = Astro.props
+const t = useTranslations(locale)
+
+function href(target: number) {
+	return getRelativeLocaleUrl(
+		locale,
+		target === 1 ? '/blogs' : `/blogs/page/${target}`
+	)
+}
+
+function buildRange(current: number, total: number) {
+	if (total <= 7) {
+		return Array.from({ length: total }, (_, index) => index + 1)
+	}
+
+	const wanted = new Set([1, total, current, current - 1, current + 1])
+
+	if (current <= 3) {
+		wanted.add(2)
+		wanted.add(3)
+		wanted.add(4)
+	}
+
+	if (current >= total - 2) {
+		wanted.add(total - 3)
+		wanted.add(total - 2)
+		wanted.add(total - 1)
+	}
+
+	const pages = [...wanted]
+		.filter((entry) => entry >= 1 && entry <= total)
+		.sort((a, b) => a - b)
+
+	const range: (number | null)[] = []
+	let previous = 0
+
+	for (const entry of pages) {
+		if (previous && entry - previous > 1) {
+			range.push(null)
+		}
+
+		range.push(entry)
+		previous = entry
+	}
+
+	return range
+}
+
+const range = buildRange(page, totalPages)
+
+const arrow =
+	'text-muted-foreground hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-30'
+---
+
+{
+	totalPages > 1 && (
+		<nav
+			aria-label={t('pagination_label')}
+			class="flex items-center justify-center gap-1.5"
+		>
+			<Button
+				href={href(page - 1)}
+				variant="ghost"
+				size="icon"
+				disabled={page === 1}
+				class={arrow}
+				aria-label={t('pagination_previous')}
+			>
+				<Icon name="chevron-left" class="size-4" />
+			</Button>
+
+			{range.map((entry) =>
+				entry === null ? (
+					<span aria-hidden="true" class="px-1 text-sm text-muted-foreground">
+						…
+					</span>
+				) : (
+					<Button
+						href={href(entry)}
+						variant={entry === page ? 'default' : 'ghost'}
+						size="icon"
+						class={
+							entry === page
+								? ''
+								: 'text-muted-foreground hover:text-foreground'
+						}
+						aria-label={t('pagination_page_n', { page: entry })}
+						aria-current={entry === page ? 'page' : undefined}
+					>
+						{entry}
+					</Button>
+				)
+			)}
+
+			<Button
+				href={href(page + 1)}
+				variant="ghost"
+				size="icon"
+				disabled={page === totalPages}
+				class={arrow}
+				aria-label={t('pagination_next')}
+			>
+				<Icon name="chevron-right" class="size-4" />
+			</Button>
+		</nav>
+	)
+}

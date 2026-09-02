@@ -1,0 +1,15 @@
+---
+interface Props {
+	as?: 'h2' | 'h3' | 'h4' | 'div'
+	class?: string
+	[key: string]: unknown
+}
+
+const { as: Tag = 'div', class: className = '', ...rest }: Props = Astro.props
+
+const BASE = 'font-heading text-base leading-snug font-medium'
+---
+
+<Tag data-slot="card-title" class={`${BASE} ${className}`} {...rest}>
+	<slot />
+</Tag>

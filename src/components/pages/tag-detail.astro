@@ -1,0 +1,82 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { AppLayout } from '@components/layouts'
+import { EntryCard } from '@components/molecules'
+import {
+	canonical as canonicalUrl,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import type { TaggedEntry } from '@lib/content'
+
+interface Props {
+	locale: Locale
+	tag: string
+	items: TaggedEntry[]
+}
+
+const { locale, tag, items } = Astro.props
+const t = useTranslations(locale)
+
+const path = `/tags/${tag}`
+const canonical = canonicalUrl(path, locale)
+const title = `${tag} — ${t('page_tags_title')} — r3p.dev`
+const description = `Every project and post on r3p.dev tagged "${tag}" — ${items.length} ${items.length === 1 ? 'entry' : 'entries'} on infrastructure, tooling, and web development.`
+
+const seo: PageSeo = {
+	path,
+	locale,
+	title,
+	description,
+	jsonLd: [
+		...schema.siteNodes(description),
+		schema.webPage({
+			canonical,
+			name: title,
+			description,
+			alsoTypes: ['CollectionPage'],
+			breadcrumb: true
+		}),
+		schema.breadcrumbList(canonical, [
+			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+			{ name: t('page_tags_title'), path: getRelativeLocaleUrl(locale, '/tags') },
+			{ name: tag, path: getRelativeLocaleUrl(locale, path) }
+		]),
+		schema.itemList(
+			canonical,
+			items.map((item) => ({
+				name: item.title,
+				path: getRelativeLocaleUrl(locale, `/${item.type}/${item.slug}`)
+			}))
+		)
+	]
+}
+---
+
+<AppLayout seo={seo}>
+	<div class="space-y-12">
+		<div class="space-y-4">
+			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+				{t('tags_heading', { tag })}
+			</h1>
+			<p class="text-muted-foreground">{t('tags_entry_lead')}</p>
+		</div>
+
+		<ul class="space-y-4">
+			{
+				items.map((item) => (
+					<EntryCard
+						href={getRelativeLocaleUrl(locale, `/${item.type}/${item.slug}`)}
+						title={item.title}
+						description={item.description}
+						date={item.date}
+						tags={item.tags}
+						locale={locale}
+						clamp={1}
+					/>
+				))
+			}
+		</ul>
+	</div>
+</AppLayout>

@@ -1,0 +1,114 @@
+---
+import '@styles/globals.css'
+import Font from 'astro/components/Font.astro'
+
+import { getRelativeLocaleUrl } from 'astro:i18n'
+
+import Seo from '@components/seo.astro'
+import { SITE, type PageSeo } from '@lib/seo'
+import { toLocale, useTranslations } from '@lib/i18n'
+import { SiteNav } from '@components/organisms'
+
+interface Props {
+	seo: PageSeo
+	navPath?: string
+	width?: 'narrow' | 'wide'
+}
+
+const { seo, navPath, width = 'narrow' } = Astro.props
+
+const measure = width === 'wide' ? 'max-w-5xl' : 'max-w-2xl'
+
+const locale = seo.locale ?? toLocale(Astro.currentLocale)
+const navHighlight = navPath ?? seo.path
+const t = useTranslations(locale)
+
+const year = new Date().getFullYear()
+---
+
+<!doctype html>
+<html lang={locale} class="dark">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#0a0a0a" />
+		<meta name="generator" content={Astro.generator} />
+
+		<link rel="icon" href="/favicon.ico" sizes="any" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+
+		<Font cssVariable="--font-jetbrains-mono" preload />
+
+		<link
+			rel="alternate"
+			type="application/rss+xml"
+			title={`${SITE.name} — ${t('page_blogs_title')}`}
+			href="/rss.xml"
+		/>
+		<link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
+
+		<Seo seo={{ ...seo, locale }} />
+
+		<script is:inline>
+			;(function () {
+				try {
+					const theme = localStorage.getItem('theme') || 'dark'
+					const dark =
+						theme === 'dark' ||
+						(theme === 'system' &&
+							matchMedia('(prefers-color-scheme: dark)').matches)
+					document.documentElement.classList.toggle('dark', dark)
+				} catch {}
+			})()
+		</script>
+	</head>
+
+	<body>
+		<a
+			href="#main-content"
+			class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-100 focus-visible:rounded-md focus-visible:bg-foreground focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-background"
+		>
+			{t('a11y_skip_to_content')}
+		</a>
+
+		<div class="relative min-h-screen bg-background">
+			<main
+				id="main-content"
+				tabindex="-1"
+				class:list={['mx-auto p-4 outline-none sm:p-6 md:p-8', measure]}
+			>
+				<slot />
+			</main>
+
+			<footer
+				class:list={[
+					'mx-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-6 pt-8 pb-32 text-sm text-muted-foreground',
+					measure
+				]}
+			>
+				<span>
+					© {year}
+					{SITE.author} · {SITE.name}. {t('footer_rights')}
+				</span>
+
+				<span class="flex items-center gap-4">
+					<a
+						href={getRelativeLocaleUrl(locale, '/tags')}
+						class="underline underline-offset-4 hover:text-foreground"
+					>
+						{t('footer_browse_tags')}
+					</a>
+					<a
+						href="/rss.xml"
+						class="underline underline-offset-4 hover:text-foreground"
+					>
+						{t('footer_rss')}
+					</a>
+				</span>
+			</footer>
+		</div>
+
+		<SiteNav locale={locale} path={navHighlight} />
+	</body>
+</html>

@@ -1,0 +1,125 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { render } from 'astro:content'
+
+import {
+	canonical as canonicalUrl,
+	pageTitle,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { formatDate, isoDay, type Blog } from '@lib/content'
+import { Badge, Icon, ReadingIndicator } from '@components/atoms'
+import { AppLayout } from '@components/layouts'
+import { ImageLightbox, Toc } from '@components/organisms'
+import CodeCopy from '@components/code-copy.astro'
+
+interface Props {
+	locale: Locale
+	blog: Blog
+}
+
+const { locale, blog } = Astro.props
+const t = useTranslations(locale)
+
+const { Content, headings } = await render(blog)
+
+const path = `/blogs/${blog.id}`
+const canonical = canonicalUrl(path, locale)
+const published = isoDay(blog.data.date)
+const modified = blog.data.updated ? isoDay(blog.data.updated) : published
+
+const seo: PageSeo = {
+	path,
+	locale,
+	title: pageTitle(blog.data.title),
+	description: blog.data.description,
+	type: 'article',
+	published,
+	modified,
+	tags: blog.data.tags,
+	imageAlt: blog.data.title,
+	jsonLd: [
+		...schema.siteNodes(blog.data.description),
+		schema.webPage({
+			canonical,
+			name: blog.data.title,
+			description: blog.data.description,
+			breadcrumb: true,
+			dateModified: modified
+		}),
+		schema.blogPosting({
+			canonical,
+			headline: blog.data.title,
+			description: blog.data.description,
+			datePublished: published,
+			dateModified: modified,
+			tags: blog.data.tags
+		}),
+		schema.breadcrumbList(canonical, [
+			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+			{ name: t('page_blogs_title'), path: getRelativeLocaleUrl(locale, '/blogs') },
+			{ name: blog.data.title, path: getRelativeLocaleUrl(locale, path) }
+		])
+	]
+}
+---
+
+<ReadingIndicator />
+
+<AppLayout seo={seo} width="wide">
+	<article class="space-y-8 pt-12 2xl:pt-0">
+		<header class="space-y-6">
+			<div class="space-y-4">
+				<h1
+					class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl"
+				>
+					{blog.data.title}
+				</h1>
+
+				<p class="text-lg text-muted-foreground">{blog.data.description}</p>
+			</div>
+
+			<div class="flex items-center gap-2 text-sm text-muted-foreground">
+				<Icon name="calendar" class="size-4" />
+				<time datetime={published}>{formatDate(blog.data.date, locale)}</time>
+			</div>
+
+			<div class="flex flex-wrap gap-2 pt-2">
+				{
+					blog.data.tags.map((tag) => (
+						<Badge
+							variant="secondary"
+							href={getRelativeLocaleUrl(locale, `/tags/${tag}`)}
+						>
+							{tag}
+						</Badge>
+					))
+				}
+			</div>
+		</header>
+
+		<div class="my-12 border-t border-border md:my-16"></div>
+
+		<div class="prose max-w-none leading-relaxed text-muted-foreground">
+			<Content />
+		</div>
+
+		<div class="my-12 border-t border-border md:my-16"></div>
+
+		<footer>
+			<a
+				href={getRelativeLocaleUrl(locale, '/blogs')}
+				class="inline-flex items-center gap-2 font-medium text-muted-foreground transition-colors hover:text-foreground"
+			>
+				<Icon name="arrow-left" class="size-5" />
+				{t('blogs_back')}
+			</a>
+		</footer>
+	</article>
+
+	<Toc headings={headings} locale={locale} />
+	<CodeCopy locale={locale} />
+	<ImageLightbox locale={locale} />
+</AppLayout>

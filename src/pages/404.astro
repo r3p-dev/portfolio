@@ -1,0 +1,40 @@
+---
+import { Button } from '@components/atoms'
+import { AppLayout } from '@components/layouts'
+import { defaultLocale, useTranslations } from '@lib/i18n'
+import { type PageSeo } from '@lib/seo'
+
+const locale = defaultLocale
+const t = useTranslations(locale)
+
+const heading = t('error_404_heading')
+const body = t('error_404_body')
+
+const seo: PageSeo = {
+	path: '/404',
+	locale,
+	title: `404 — ${heading} — r3p.dev`,
+	description: body,
+	noindex: true
+}
+---
+
+<AppLayout seo={seo} navPath="/">
+	<div
+		class="flex min-h-[60vh] flex-col items-center justify-center space-y-6 text-center"
+	>
+		<p class="text-7xl font-bold tracking-tight text-muted-foreground">404</p>
+
+		<div class="space-y-2">
+			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+				{heading}
+			</h1>
+			<p class="max-w-prose text-muted-foreground">{body}</p>
+		</div>
+
+		<div class="flex flex-wrap items-center justify-center gap-3">
+			<Button href="/">{t('error_back_home')}</Button>
+			<Button href="/blogs" variant="outline">{t('error_read_blog')}</Button>
+		</div>
+	</div>
+</AppLayout>

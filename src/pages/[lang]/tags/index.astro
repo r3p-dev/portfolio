@@ -1,0 +1,12 @@
+---
+import type { GetStaticPaths } from 'astro'
+
+import TagsIndex from '../../../components/pages/tags-index.astro'
+import { langParams } from '../../../lib/routes'
+
+export const getStaticPaths = (() => langParams()) satisfies GetStaticPaths
+
+const { locale } = Astro.props
+---
+
+<TagsIndex locale={locale} />

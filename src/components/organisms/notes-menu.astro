@@ -1,0 +1,89 @@
+---
+import { Icon, type IconName } from '@components/atoms'
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { useTranslations, type Locale } from '@lib/i18n'
+
+interface Props {
+	locale: Locale
+	path: string
+}
+
+const { locale, path } = Astro.props
+const t = useTranslations(locale)
+
+const items: { href: string; icon: IconName; label: string }[] = [
+	{ href: '/blogs', icon: 'pencil', label: t('nav_blogs') },
+	{ href: '/now', icon: 'flask', label: t('nav_now') }
+]
+
+function isActive(href: string) {
+	return path === href || path.startsWith(`${href}/`)
+}
+
+const open = items.some((item) => isActive(item.href))
+---
+
+<details class="notes group/menu relative">
+	<summary
+		class:list={[
+			'group/nav relative inline-flex size-12 shrink-0 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 group-open/menu:bg-muted group-open/menu:text-foreground',
+			open && 'bg-muted text-foreground'
+		]}
+		aria-label={t('nav_notes')}
+	>
+		<Icon name="pencil" class="size-6" />
+
+		<span
+			class="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background group-hover/nav:block group-focus-visible/nav:block group-open/menu:hidden!"
+		>
+			{t('nav_notes')}
+		</span>
+	</summary>
+
+	<div
+		class="absolute bottom-full left-1/2 z-50 mb-3 w-56 -translate-x-1/2 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
+	>
+		<p
+			class="px-2 py-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase"
+		>
+			{t('nav_notes')}
+		</p>
+
+		<ul>
+			{
+				items.map((item) => (
+					<li>
+						<a
+							href={getRelativeLocaleUrl(locale, item.href)}
+							aria-current={isActive(item.href) ? 'page' : undefined}
+							class:list={[
+								'flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
+								isActive(item.href) && 'bg-muted font-medium text-foreground'
+							]}
+						>
+							<Icon name={item.icon} class="size-4 text-muted-foreground" />
+							{item.label}
+						</a>
+					</li>
+				))
+			}
+		</ul>
+	</div>
+</details>
+
+<script>
+	const menu = document.querySelector<HTMLDetailsElement>('details.notes')
+
+	if (menu) {
+		document.addEventListener('click', (event) => {
+			if (menu.open && !menu.contains(event.target as Node)) menu.open = false
+		})
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && menu.open) {
+				menu.open = false
+				menu.querySelector('summary')?.focus()
+			}
+		})
+	}
+</script>

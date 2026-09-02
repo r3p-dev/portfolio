@@ -1,0 +1,19 @@
+---
+import type { GetStaticPaths } from 'astro'
+
+import BlogDetail from '../../../components/pages/blog-detail.astro'
+import { allBlogs } from '../../../lib/content/utils'
+import { langParams } from '../../../lib/routes'
+
+export const getStaticPaths = (async () => {
+	const blogs = await allBlogs()
+
+	return langParams().flatMap(({ params, props }) =>
+		blogs.map((blog) => ({ params: { ...params, slug: blog.id }, props: { ...props, blog } }))
+	)
+}) satisfies GetStaticPaths
+
+const { locale, blog } = Astro.props
+---
+
+<BlogDetail locale={locale} blog={blog} />

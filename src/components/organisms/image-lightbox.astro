@@ -1,0 +1,291 @@
+---
+import { Icon } from '@components/atoms'
+import { useTranslations, type Locale } from '@lib/i18n'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+
+const control =
+	'inline-flex size-11 items-center justify-center rounded-lg text-foreground transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40'
+---
+
+<div
+	data-image-lightbox
+	data-counter-template={t('image_counter')}
+	role="dialog"
+	aria-modal="true"
+	aria-label={t('image_view_full')}
+	class="fixed inset-0 z-200 bg-background/95"
+	hidden
+>
+	<div
+		data-lightbox-stage
+		class="flex h-dvh w-screen touch-none items-center justify-center overflow-hidden py-10"
+	>
+		<img
+			data-lightbox-image
+			src=""
+			alt=""
+			class="max-h-full max-w-full origin-center object-contain select-none"
+			draggable="false"
+		/>
+	</div>
+
+	<div class="absolute top-3 right-3 flex items-center gap-1.5">
+		<button
+			type="button"
+			data-lightbox-zoom-out
+			class={control}
+			aria-label={t('image_zoom_out')}
+		>
+			<Icon name="zoom-out" class="size-5" />
+		</button>
+		<button
+			type="button"
+			data-lightbox-zoom-in
+			class={control}
+			aria-label={t('image_zoom_in')}
+		>
+			<Icon name="zoom-in" class="size-5" />
+		</button>
+		<button
+			type="button"
+			data-lightbox-close
+			class={control}
+			aria-label={t('image_close')}
+		>
+			<Icon name="x" class="size-5" />
+		</button>
+	</div>
+
+	<button
+		type="button"
+		data-lightbox-previous
+		class={`absolute top-1/2 left-3 -translate-y-1/2 ${control}`}
+		aria-label={t('image_previous')}
+	>
+		<Icon name="chevron-left" class="size-5" />
+	</button>
+
+	<button
+		type="button"
+		data-lightbox-next
+		class={`absolute top-1/2 right-3 -translate-y-1/2 ${control}`}
+		aria-label={t('image_next')}
+	>
+		<Icon name="chevron-right" class="size-5" />
+	</button>
+
+	<p
+		data-lightbox-counter
+		class="absolute inset-x-0 bottom-4 text-center text-sm text-muted-foreground"
+		aria-live="polite"
+	>
+	</p>
+</div>
+
+<script>
+	const root = document.querySelector<HTMLElement>('[data-image-lightbox]')
+	const triggers = Array.from(
+		document.querySelectorAll<HTMLButtonElement>('[data-blog-image-trigger]')
+	)
+
+	if (root && triggers.length) {
+		const overlay = root
+
+		const image = overlay.querySelector<HTMLImageElement>(
+			'[data-lightbox-image]'
+		)!
+		const stage = overlay.querySelector<HTMLElement>('[data-lightbox-stage]')!
+		const counter = overlay.querySelector<HTMLElement>('[data-lightbox-counter]')!
+		const closeButton = overlay.querySelector<HTMLButtonElement>(
+			'[data-lightbox-close]'
+		)!
+		const zoomInButton = overlay.querySelector<HTMLButtonElement>(
+			'[data-lightbox-zoom-in]'
+		)!
+		const zoomOutButton = overlay.querySelector<HTMLButtonElement>(
+			'[data-lightbox-zoom-out]'
+		)!
+		const previousButton = overlay.querySelector<HTMLButtonElement>(
+			'[data-lightbox-previous]'
+		)!
+		const nextButton = overlay.querySelector<HTMLButtonElement>(
+			'[data-lightbox-next]'
+		)!
+
+		const counterTemplate =
+			overlay.dataset.counterTemplate ?? 'Image {current} of {total}'
+
+		const MIN_SCALE = 1
+		const MAX_SCALE = 5
+		const STEP = 1.5
+
+		let group: HTMLButtonElement[] = []
+		let index = 0
+		let scale = 1
+		let x = 0
+		let y = 0
+		let opener: HTMLElement | null = null
+		let pointerId: number | null = null
+		let originX = 0
+		let originY = 0
+
+		function draw() {
+			image.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
+			image.style.cursor =
+				scale > MIN_SCALE ? (pointerId === null ? 'grab' : 'grabbing') : ''
+			zoomOutButton.disabled = scale <= MIN_SCALE
+			zoomInButton.disabled = scale >= MAX_SCALE
+		}
+
+		function resetTransform() {
+			scale = 1
+			x = 0
+			y = 0
+			draw()
+		}
+
+		function zoom(factor: number) {
+			const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor))
+
+			if (next === scale) return
+
+			if (next === MIN_SCALE) {
+				x = 0
+				y = 0
+			} else {
+				x *= next / scale
+				y *= next / scale
+			}
+
+			scale = next
+			draw()
+		}
+
+		function show(next: number) {
+			index = (next + group.length) % group.length
+
+			const trigger = group[index]
+			if (!trigger) return
+
+			image.src = trigger.dataset.fullSrc ?? ''
+			image.alt = trigger.dataset.alt ?? ''
+			image.width = Number(trigger.dataset.fullWidth) || 0
+			image.height = Number(trigger.dataset.fullHeight) || 0
+
+			const multiple = group.length > 1
+
+			previousButton.hidden = !multiple
+			nextButton.hidden = !multiple
+			counter.textContent = multiple
+				? counterTemplate
+						.replace('{current}', String(index + 1))
+						.replace('{total}', String(group.length))
+				: ''
+
+			resetTransform()
+		}
+
+		function open(trigger: HTMLButtonElement) {
+			const figure = trigger.closest('[data-blog-image]')
+
+			group = figure
+				? Array.from(
+						figure.querySelectorAll<HTMLButtonElement>(
+							'[data-blog-image-trigger]'
+						)
+					)
+				: [trigger]
+
+			opener = trigger
+			overlay.hidden = false
+			document.body.style.overflow = 'hidden'
+
+			show(group.indexOf(trigger))
+			closeButton.focus()
+		}
+
+		function close() {
+			overlay.hidden = true
+			document.body.style.overflow = ''
+			image.src = ''
+			opener?.focus()
+			opener = null
+		}
+
+		for (const trigger of triggers) {
+			trigger.addEventListener('click', () => open(trigger))
+		}
+
+		closeButton.addEventListener('click', close)
+		zoomInButton.addEventListener('click', () => zoom(STEP))
+		zoomOutButton.addEventListener('click', () => zoom(1 / STEP))
+		previousButton.addEventListener('click', () => show(index - 1))
+		nextButton.addEventListener('click', () => show(index + 1))
+
+		stage.addEventListener('click', (event) => {
+			if (event.target === stage) close()
+		})
+
+		image.addEventListener('dblclick', () => {
+			if (scale > MIN_SCALE) resetTransform()
+			else zoom(2)
+		})
+
+		stage.addEventListener(
+			'wheel',
+			(event) => {
+				event.preventDefault()
+				zoom(event.deltaY < 0 ? STEP : 1 / STEP)
+			},
+			{ passive: false }
+		)
+
+		image.addEventListener('pointerdown', (event) => {
+			if (scale <= MIN_SCALE) return
+
+			pointerId = event.pointerId
+			originX = event.clientX - x
+			originY = event.clientY - y
+			image.setPointerCapture(pointerId)
+			draw()
+		})
+
+		image.addEventListener('pointermove', (event) => {
+			if (pointerId !== event.pointerId) return
+
+			x = event.clientX - originX
+			y = event.clientY - originY
+			draw()
+		})
+
+		for (const name of ['pointerup', 'pointercancel'] as const) {
+			image.addEventListener(name, (event) => {
+				if (pointerId !== event.pointerId) return
+
+				image.releasePointerCapture(pointerId)
+				pointerId = null
+				draw()
+			})
+		}
+
+		document.addEventListener('keydown', (event) => {
+			if (overlay.hidden) return
+
+			if (event.key === 'Escape') close()
+			else if (event.key === 'ArrowLeft' && group.length > 1) show(index - 1)
+			else if (event.key === 'ArrowRight' && group.length > 1) show(index + 1)
+			else if (event.key === '+' || event.key === '=') zoom(STEP)
+			else if (event.key === '-') zoom(1 / STEP)
+			else if (event.key === '0') resetTransform()
+			else return
+
+			event.preventDefault()
+		})
+	}
+</script>

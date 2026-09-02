@@ -1,0 +1,74 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { AppLayout } from '@components/layouts'
+import {
+	canonical as canonicalUrl,
+	schema,
+	type PageSeo
+} from '@lib/seo'
+import { useTranslations, type Locale } from '@lib/i18n'
+import { allBlogs, blogPage } from '@lib/content'
+import { BlogList } from '@components/organisms'
+
+interface Props {
+	locale: Locale
+}
+
+const { locale } = Astro.props
+const t = useTranslations(locale)
+
+const result = blogPage(await allBlogs(), 1)
+
+const title = `${t('page_blogs_title')} — r3p.dev`
+const description =
+	'Writing on infrastructure, containers, Linux servers, and web development — notes from building and running things in production.'
+const canonical = canonicalUrl('/blogs', locale)
+
+const seo: PageSeo = {
+	path: '/blogs',
+	locale,
+	title,
+	description,
+	jsonLd: [
+		...schema.siteNodes(description),
+		schema.webPage({
+			canonical,
+			name: title,
+			description,
+			alsoTypes: ['CollectionPage'],
+			breadcrumb: true
+		}),
+		schema.breadcrumbList(canonical, [
+			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+			{ name: t('page_blogs_title'), path: getRelativeLocaleUrl(locale, '/blogs') }
+		]),
+		schema.itemList(
+			canonical,
+			result.blogs.map((blog) => ({
+				name: blog.data.title,
+				path: getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)
+			}))
+		)
+	],
+	next: result.totalPages > 1 ? '/blogs/page/2' : undefined
+}
+---
+
+<AppLayout seo={seo}>
+	<div class="space-y-12">
+		<div class="space-y-4">
+			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+				{t('page_blogs_title')}
+			</h1>
+			<p class="text-muted-foreground">{t('blogs_lead')}</p>
+		</div>
+
+		<BlogList
+			blogs={result.blogs}
+			page={result.page}
+			totalPages={result.totalPages}
+			total={result.total}
+			locale={locale}
+		/>
+	</div>
+</AppLayout>

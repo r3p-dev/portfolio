@@ -1,0 +1,32 @@
+---
+const BASE =
+	'group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>svg]:pointer-events-none [&>svg]:size-3!'
+
+const VARIANTS = {
+	default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
+	secondary: 'bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80',
+	outline:
+		'border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground'
+} as const
+
+interface Props {
+	href?: string
+	variant?: keyof typeof VARIANTS
+	class?: string
+	[key: string]: unknown
+}
+
+const {
+	href,
+	variant = 'default',
+	class: className = '',
+	...rest
+} = Astro.props
+
+const Tag = href ? 'a' : 'span'
+const classes = `${BASE} ${VARIANTS[variant]} ${className}`
+---
+
+<Tag data-slot="badge" href={href} class={classes} {...rest}>
+	<slot />
+</Tag>

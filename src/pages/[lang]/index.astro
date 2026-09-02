@@ -1,0 +1,12 @@
+---
+import type { GetStaticPaths } from 'astro'
+
+import Home from '../../components/pages/home.astro'
+import { langParams } from '../../lib/routes'
+
+export const getStaticPaths = (() => langParams()) satisfies GetStaticPaths
+
+const { locale } = Astro.props
+---
+
+<Home locale={locale} />
