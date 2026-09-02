@@ -1,0 +1,31 @@
+---
+title: Kapturae
+description: 'Photobooth yang berjalan sepenuhnya di dalam browser: ambil gambar dari webcam, susun di atas sebuah template, lalu ekspor strip beresolusi tinggi tanpa ada satu pun data yang meninggalkan perangkat.'
+date: '2026-07-14'
+tags: [typescript, browser, canvas, webcam, privacy, photobooth]
+demo: https://kapturae.r3p.dev
+cover: ../../../assets/projects/kapturae.png
+wip: true
+---
+
+# Pendahuluan
+
+Kapturae adalah photobooth yang hidup sepenuhnya di dalam browser. Ia membuka webcam, mengambil serangkaian foto, menatanya di atas sebuah template, lalu mengembalikan strip beresolusi tinggi yang siap dicetak atau dibagikan.
+
+Tidak ada yang diunggah. Tidak ada akun, tidak ada pemrosesan di sisi server, dan tidak ada bucket penyimpanan yang menyimpan wajah orang lain. Setiap frame tetap berada di tab yang mengambilnya, dan menutup tab itu sudah menjadi keseluruhan cerita penghapusannya.
+
+# Alasan Keberadaannya
+
+Setiap situs photobooth yang saya coba meminta unggahan. Itu pertukaran yang aneh untuk sesuatu yang sekadar iseng: menyerahkan serangkaian foto diri sendiri dan teman-teman, kepada layanan yang kebijakan penyimpanan datanya tidak akan pernah Anda baca, hanya demi selembar strip empat frame.
+
+Browser sebenarnya sudah punya semua yang dibutuhkan. `getUserMedia` membuka kamera, `canvas` menyusun frame, dan `toBlob` menghasilkan berkasnya. Satu-satunya alasan melibatkan server adalah menjadikan foto-foto itu masalah orang lain, dan justru bagian itulah yang layak dihindari.
+
+# Cara Kerjanya
+
+Alur pengambilan gambar adalah hitung mundur yang menggerakkan serangkaian frame, digambar dari trek video langsung ke sebuah canvas di luar layar. Setiap frame disimpan pada resolusi asli sensor, bukan resolusi pratinjau, sehingga hasil ekspor tidak dibatasi oleh seberapa besar pratinjau kebetulan dirender.
+
+Penyusunan dilakukan di canvas kedua: template menentukan posisi slot dan dimensi strip, lalu setiap frame yang diambil digambar ke dalam slotnya. Karena kedua tahap sama-sama pekerjaan canvas, hasil ekspor hanyalah canvas tersusun pada ukuran penuh; pratinjau dan keluaran adalah pipeline yang sama pada skala berbeda.
+
+# Status
+
+Kapturae masih dalam pengerjaan. Alur pengambilan gambar dan ekspor sudah stabil; template, filter, dan tata letak cetak masih terus berubah.

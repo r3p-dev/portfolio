@@ -19,7 +19,7 @@ const I18N = {
 	routing: { prefixDefaultLocale: false }
 }
 
-const DATES = contentDates()
+const DATES = contentDates(I18N.locales)
 
 export default defineConfig({
 	devToolbar: { enabled: false },

@@ -19,7 +19,7 @@ const { seo } = Astro.props
 const locale = seo.locale ?? defaultLocale
 const href = canonical(seo.path, locale)
 const image = absolute(seo.image ?? SITE.ogImage.path)
-const imageAlt = seo.imageAlt ?? `${SITE.name} — ${SITE.author}`
+const imageAlt = seo.imageAlt ?? `${SITE.name} · ${SITE.author}`
 
 const isDefaultImage = (seo.image ?? SITE.ogImage.path) === SITE.ogImage.path
 

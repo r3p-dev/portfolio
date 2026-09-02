@@ -17,10 +17,10 @@ interface Props {
 const { locale } = Astro.props
 const t = useTranslations(locale)
 
-const tags = await allTags()
+const tags = await allTags(locale)
 
-const title = `${t('page_tags_title')} — r3p.dev`
-const description = `Browse every topic covered on r3p.dev — ${tags.length} tags spanning infrastructure, containers, Linux, and web development across projects and writing.`
+const title = t('page_tags_title')
+const description = t('seo_tags_description', { count: tags.length })
 const canonical = canonicalUrl('/tags', locale)
 
 const seo: PageSeo = {

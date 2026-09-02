@@ -23,7 +23,7 @@ import {
 	type PageSeo
 } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
-import { allBlogs, allProjects, formatDate } from '@lib/content'
+import { allBlogs, allProjects, entrySlug, formatDate } from '@lib/content'
 import { experiences, skills, socials } from '@lib/site-content'
 
 interface Props {
@@ -33,16 +33,16 @@ interface Props {
 const { locale } = Astro.props
 const t = useTranslations(locale)
 
-const projects = (await allProjects()).slice(0, 2)
-const blogs = (await allBlogs()).slice(0, 3)
+const projects = (await allProjects(locale)).slice(0, 2)
+const blogs = (await allBlogs(locale)).slice(0, 3)
 
-const description = `Portfolio of ${SITE.author} — projects, writing on infrastructure and web development, and contact.`
+const description = t('seo_home_description', { author: SITE.author })
 const canonical = canonicalUrl('/', locale)
 
 const seo: PageSeo = {
 	path: '/',
 	locale,
-	title: `${SITE.author} — ${t('home_role')}`,
+	title: `${SITE.author} · ${t('home_role')}`,
 	description,
 	type: 'profile',
 	jsonLd: [
@@ -224,7 +224,10 @@ const seo: PageSeo = {
 					projects.map((project) => (
 						<li>
 							<a
-								href={getRelativeLocaleUrl(locale, `/projects/${project.id}`)}
+								href={getRelativeLocaleUrl(
+								locale,
+								`/projects/${entrySlug(project.id)}`
+							)}
 								class="group block h-full"
 							>
 								<Card class="h-full">
@@ -285,7 +288,7 @@ const seo: PageSeo = {
 					blogs.map((blog) => (
 						<li>
 							<a
-								href={getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)}
+								href={getRelativeLocaleUrl(locale, `/blogs/${entrySlug(blog.id)}`)}
 								class="group block"
 							>
 								<Card>

@@ -25,9 +25,9 @@ const LOCALE_LABELS: Record<Locale, string> = {
 }
 ---
 
-<details class="settings group/menu relative">
+<details class="settings group/menu">
 	<summary
-		class="group/nav relative inline-flex size-12 shrink-0 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 group-open/menu:bg-muted group-open/menu:text-foreground"
+		class="dock-button group/nav relative inline-flex size-12 shrink-0 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 group-open/menu:bg-muted group-open/menu:text-foreground"
 		aria-label={t('nav_settings')}
 	>
 		<Icon name="settings" class="size-6" />
@@ -40,7 +40,7 @@ const LOCALE_LABELS: Record<Locale, string> = {
 	</summary>
 
 	<div
-		class="absolute bottom-full left-1/2 z-50 mb-3 w-56 -translate-x-1/2 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
+		class="absolute bottom-full left-1/2 z-50 mb-3 w-56 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
 	>
 		<p class="px-2 py-1.5 text-sm font-semibold">{t('settings_title')}</p>
 

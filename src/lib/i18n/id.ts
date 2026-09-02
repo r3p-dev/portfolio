@@ -37,12 +37,12 @@ export const id: Messages = {
 	blogs_toc_close: 'Tutup daftar isi',
 	guestbook_title: 'Buku Tamu',
 	guestbook_lead:
-		'Tinggalkan pesan kalau kamu mampir. Tanpa akun, tanpa pelacakan — cukup nama dan pesan.',
+		'Tinggalkan pesan kalau kamu mampir. Tanpa akun, tanpa pelacakan, cukup nama dan pesan.',
 	guestbook_sign_heading: 'Isi buku tamu',
 	guestbook_name: 'Nama',
 	guestbook_message: 'Pesan',
 	guestbook_submit: 'Kirim pesan',
-	guestbook_thanks: 'Terima kasih — pesanmu ada di bawah.',
+	guestbook_thanks: 'Terima kasih. Pesanmu ada di bawah.',
 	guestbook_empty: 'Belum ada yang mengisi. Kamu bisa jadi yang pertama.',
 	guestbook_honeypot: 'Biarkan kolom ini kosong',
 	guestbook_error_name: 'Silakan isi nama.',
@@ -119,5 +119,19 @@ export const id: Messages = {
 	code_copied: 'Tersalin',
 	page_projects_title: 'Proyek',
 	page_blogs_title: 'Blog',
-	page_tags_title: 'Tag'
+	page_tags_title: 'Tag',
+	tags_entry_count_one: '{count} entri',
+	tags_entry_count_other: '{count} entri',
+	seo_home_description:
+		'Portofolio {author}: proyek, tulisan tentang infrastruktur dan pengembangan web, serta kontak.',
+	seo_blogs_description:
+		'Tulisan tentang infrastruktur, kontainer, server Linux, dan pengembangan web, berisi catatan dari membangun dan menjalankan berbagai hal di produksi.',
+	seo_blogs_page_description:
+		'Halaman {page} dari tulisan tentang infrastruktur, kontainer, server Linux, dan pengembangan web di r3p.dev.',
+	seo_projects_description:
+		'Hal-hal yang saya rancang, bangun, dan rilis: aplikasi web, platform operasional, dan infrastruktur yang menjalankannya.',
+	seo_tags_description:
+		'Jelajahi setiap topik yang dibahas di r3p.dev: {count} tag yang mencakup infrastruktur, kontainer, Linux, dan pengembangan web di seluruh proyek dan tulisan.',
+	seo_tag_description:
+		'Setiap proyek dan tulisan di r3p.dev bertagar "{tag}": {entries} tentang infrastruktur, perkakas, dan pengembangan web.'
 }

@@ -35,12 +35,12 @@ export const en = {
 	blogs_toc_close: 'Close table of contents',
 	guestbook_title: 'Guestbook',
 	guestbook_lead:
-		'Leave a note if you stopped by. No account, no tracking — just a name and a message.',
+		'Leave a note if you stopped by. No account, no tracking, just a name and a message.',
 	guestbook_sign_heading: 'Sign the guestbook',
 	guestbook_name: 'Name',
 	guestbook_message: 'Message',
 	guestbook_submit: 'Sign guestbook',
-	guestbook_thanks: 'Thanks for signing — your note is below.',
+	guestbook_thanks: 'Thanks for signing. Your note is below.',
 	guestbook_empty: 'No one has signed yet. You could be the first.',
 	guestbook_honeypot: 'Leave this field empty',
 	guestbook_error_name: 'Please enter a name.',
@@ -118,5 +118,19 @@ export const en = {
 	code_copied: 'Copied',
 	page_projects_title: 'Projects',
 	page_blogs_title: 'Blogs',
-	page_tags_title: 'Tags'
+	page_tags_title: 'Tags',
+	tags_entry_count_one: '{count} entry',
+	tags_entry_count_other: '{count} entries',
+	seo_home_description:
+		'Portfolio of {author}: projects, writing on infrastructure and web development, and contact.',
+	seo_blogs_description:
+		'Writing on infrastructure, containers, Linux servers, and web development, with notes from building and running things in production.',
+	seo_blogs_page_description:
+		'Page {page} of writing on infrastructure, containers, Linux servers, and web development on r3p.dev.',
+	seo_projects_description:
+		'Things I have designed, built, and shipped: web applications, operations platforms, and the infrastructure that runs them.',
+	seo_tags_description:
+		'Browse every topic covered on r3p.dev: {count} tags spanning infrastructure, containers, Linux, and web development across projects and writing.',
+	seo_tag_description:
+		'Every project and post on r3p.dev tagged "{tag}": {entries} on infrastructure, tooling, and web development.'
 } as const

@@ -12,7 +12,7 @@ function isoDay(value: unknown) {
 	return undefined
 }
 
-function datesIn(dir: string, prefix: string) {
+function datesIn(dir: string, prefix: string, locales: readonly string[]) {
 	const dates: DateMap = {}
 
 	let files: string[]
@@ -31,20 +31,28 @@ function datesIn(dir: string, prefix: string) {
 		const date = isoDay(frontmatter['updated']) ?? isoDay(frontmatter['date'])
 		if (!date) continue
 
-		const slug = relative('.', file)
+		const segments = relative('.', file)
 			.replace(/\.mdx?$/, '')
 			.split(sep)
-			.join('/')
 
-		dates[`${prefix}/${slug}`] = date
+		// `<slug>/<locale>` files all describe the same unprefixed path, so the
+		// locale segment is dropped and the newest date across them wins.
+		if (segments.length > 1 && locales.includes(segments.at(-1)!)) {
+			segments.pop()
+		}
+
+		const path = `${prefix}/${segments.join('/')}`
+		const current = dates[path]
+
+		if (!current || date > current) dates[path] = date
 	}
 
 	return dates
 }
 
-export function contentDates(): DateMap {
+export function contentDates(locales: readonly string[]): DateMap {
 	return {
-		...datesIn('./src/contents/blogs', '/blogs'),
-		...datesIn('./src/contents/projects', '/projects')
+		...datesIn('./src/contents/blogs', '/blogs', locales),
+		...datesIn('./src/contents/projects', '/projects', locales)
 	}
 }

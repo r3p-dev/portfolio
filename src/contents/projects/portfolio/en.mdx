@@ -1,10 +1,10 @@
 ---
 title: Personal Portfolio Website
-description: The site you are reading. A content-first portfolio built with Astro, TypeScript, and Tailwind CSS — statically rendered, bilingual, and served from a single Node process that also runs the guestbook.
+description: 'The site you are reading. A content-first portfolio built with Astro, TypeScript, and Tailwind CSS: statically rendered, bilingual, and served from a single Node process that also runs the guestbook.'
 date: '2026-05-25'
 updated: '2026-08-31'
 tags: [astro, typescript, tailwindcss, mdx, i18n, seo, portfolio]
-cover: ../../assets/projects/portfolio.png
+cover: ../../../assets/projects/portfolio.png
 repository: https://github.com/r3p-dev/portfolio
 demo: https://r3p.dev
 ---
@@ -21,7 +21,7 @@ Almost every route is prerendered at build time. Blog posts, projects, tag pages
 
 The guestbook is the single exception. It accepts form submissions and reads a database on each request, so it opts out of prerendering and is handled by a Node server. That one route is the entire reason the deployment is a container rather than a folder of files.
 
-Interactivity elsewhere — the theme toggle, the copy-code buttons, the table-of-contents highlight, the image lightbox — is written as small vanilla scripts. No React, no Svelte, no islands.
+Interactivity elsewhere (the theme toggle, the copy-code buttons, the table-of-contents highlight, the image lightbox) is written as small vanilla scripts. No React, no Svelte, no islands.
 
 # Features
 
@@ -35,11 +35,11 @@ A custom unified processor handles content: headings are demoted so a post's `#`
 
 ## Bilingual Routing
 
-English is served unprefixed and Indonesian lives under `/id`, generated from the same components. Copy lives in typed message catalogues keyed off the English one, so a missing Indonesian string is a compile error rather than a blank space in production.
+English is served unprefixed and Indonesian lives under `/id`, generated from the same components. Copy lives in typed message catalogues keyed off the English one, so a missing Indonesian string is a compile error rather than a blank space in production. Blog posts and projects are translated the same way, with one file per locale sitting beside each other.
 
 ## SEO Layer
 
-Metadata, canonical URLs, Open Graph tags, and JSON-LD are built from one configuration module. Every page produces a structured-data graph — Person, WebSite, WebPage, BreadcrumbList, and BlogPosting where it applies — and the sitemap takes its `lastmod` values from content frontmatter rather than from file timestamps.
+Metadata, canonical URLs, Open Graph tags, and JSON-LD are built from one configuration module. Every page produces a structured-data graph (Person, WebSite, WebPage, BreadcrumbList, and BlogPosting where it applies), and the sitemap takes its `lastmod` values from content frontmatter rather than from file timestamps.
 
 ## Guestbook
 
@@ -56,6 +56,6 @@ SQLite via `node:sqlite`
 
 # Structure Philosophy
 
-Components are organised as atoms, molecules and organisms, with page-level components kept separate from the routes that render them. Routes stay thin — they resolve params and hand off — so the English and Indonesian versions of a page share one implementation instead of drifting apart.
+Components are organised as atoms, molecules and organisms, with page-level components kept separate from the routes that render them. Routes stay thin, resolving params and handing off, so the English and Indonesian versions of a page share one implementation instead of drifting apart.
 
 The same instinct governs the dependency list. Static output, standard-library SQLite, and hand-written scripts instead of libraries mean there is very little here that can rot.

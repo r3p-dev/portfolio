@@ -3,14 +3,9 @@ import { getRelativeLocaleUrl } from 'astro:i18n'
 import { render } from 'astro:content'
 import { Image } from 'astro:assets'
 
-import {
-	canonical as canonicalUrl,
-	pageTitle,
-	schema,
-	type PageSeo
-} from '@lib/seo'
+import { canonical as canonicalUrl, schema, type PageSeo } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
-import { formatDate, isoDay, type Project } from '@lib/content'
+import { entrySlug, formatDate, isoDay, type Project } from '@lib/content'
 import { Badge, Button, Icon, ReadingIndicator } from '@components/atoms'
 import { AppLayout } from '@components/layouts'
 import { ImageLightbox, Toc } from '@components/organisms'
@@ -27,7 +22,7 @@ const t = useTranslations(locale)
 const { Content, headings } = await render(project)
 const image = project.data.cover
 
-const path = `/projects/${project.id}`
+const path = `/projects/${entrySlug(project.id)}`
 const canonical = canonicalUrl(path, locale)
 const published = isoDay(project.data.date)
 const modified = project.data.updated ? isoDay(project.data.updated) : published
@@ -35,7 +30,7 @@ const modified = project.data.updated ? isoDay(project.data.updated) : published
 const seo: PageSeo = {
 	path,
 	locale,
-	title: pageTitle(project.data.title),
+	title: project.data.title,
 	description: project.data.description,
 	type: 'article',
 	published,
@@ -69,7 +64,7 @@ const seo: PageSeo = {
 	<article class="space-y-8 pt-12 2xl:pt-0">
 		<header class="space-y-6 border-b border-border pb-8">
 			<div
-				class="relative h-64 w-full overflow-hidden rounded-xl bg-muted sm:h-80"
+				class="relative aspect-1200/630 w-full overflow-hidden rounded-xl bg-muted"
 			>
 				{
 					image && (
@@ -80,7 +75,7 @@ const seo: PageSeo = {
 							loading="eager"
 							fetchpriority="high"
 							alt={project.data.title}
-							class="h-full w-full object-cover"
+							class="h-full w-full object-contain"
 						/>
 					)
 				}

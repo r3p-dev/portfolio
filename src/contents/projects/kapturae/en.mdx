@@ -1,10 +1,10 @@
 ---
 title: Kapturae
-description: A photobooth that runs entirely in the browser — capture from the webcam, arrange the shots on a template, and export a high-resolution strip without anything leaving the device.
+description: 'A photobooth that runs entirely in the browser: capture from the webcam, arrange the shots on a template, and export a high-resolution strip without anything leaving the device.'
 date: '2026-07-14'
 tags: [typescript, browser, canvas, webcam, privacy, photobooth]
 demo: https://kapturae.r3p.dev
-cover: ../../assets/projects/kapturae.png
+cover: ../../../assets/projects/kapturae.png
 wip: true
 ---
 
@@ -12,7 +12,7 @@ wip: true
 
 Kapturae is a photobooth that lives entirely in the browser. It opens the webcam, takes a sequence of shots, lays them out on a template, and hands back a high-resolution strip ready to print or share.
 
-Nothing is uploaded. There is no account, no server-side processing, and no storage bucket holding other people's faces — every frame stays in the tab that captured it, and closing the tab is the whole deletion story.
+Nothing is uploaded. There is no account, no server-side processing, and no storage bucket holding other people's faces. Every frame stays in the tab that captured it, and closing the tab is the whole deletion story.
 
 # Why It Exists
 
@@ -24,7 +24,7 @@ The browser already has everything the job needs. `getUserMedia` opens the camer
 
 The capture loop is a countdown driving a sequence of frames drawn from the live video track onto an offscreen canvas. Each frame is kept at the sensor's native resolution rather than the preview's, so the export is not limited by how large the preview happens to render.
 
-Composition is a second canvas: the template defines slot positions and the strip dimensions, and each captured frame is drawn into its slot. Because both stages are canvas work, the export is just the composed canvas at full size — the preview and the output are the same pipeline at different scales.
+Composition is a second canvas: the template defines slot positions and the strip dimensions, and each captured frame is drawn into its slot. Because both stages are canvas work, the export is just the composed canvas at full size; the preview and the output are the same pipeline at different scales.
 
 # Status
 

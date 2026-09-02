@@ -26,7 +26,7 @@ if (!entry) throw new Error('The `now` collection has no entry to render')
 const { Content } = await render(entry)
 
 const updated = entry.data.updatedAt
-const title = `${t('now_title')} — r3p.dev`
+const title = t('now_title')
 const description = t('now_lead')
 const canonical = canonicalUrl('/now', locale)
 

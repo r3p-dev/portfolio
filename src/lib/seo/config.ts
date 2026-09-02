@@ -33,7 +33,7 @@ export function absolute(path: string) {
 const TITLE_BUDGET = 60
 
 export function pageTitle(title: string) {
-	const suffixed = `${title} — ${SITE.name}`
+	const suffixed = `${title} · ${SITE.name}`
 
 	return suffixed.length <= TITLE_BUDGET ? suffixed : title
 }

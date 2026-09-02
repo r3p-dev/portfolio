@@ -2,18 +2,22 @@
 import type { GetStaticPaths } from 'astro'
 
 import ProjectDetail from '../../../components/pages/project-detail.astro'
-import { allProjects } from '../../../lib/content/utils'
+import { allProjects, entrySlug } from '../../../lib/content/utils'
 import { langParams } from '../../../lib/routes'
 
 export const getStaticPaths = (async () => {
-	const projects = await allProjects()
+	const pages = await Promise.all(
+		langParams().map(async ({ params, props }) => {
+			const projects = await allProjects(props.locale)
 
-	return langParams().flatMap(({ params, props }) =>
-		projects.map((project) => ({
-			params: { ...params, slug: project.id },
-			props: { ...props, project }
-		}))
+			return projects.map((project) => ({
+				params: { ...params, slug: entrySlug(project.id) },
+				props: { ...props, project }
+			}))
+		})
 	)
+
+	return pages.flat()
 }) satisfies GetStaticPaths
 
 const { locale, project } = Astro.props

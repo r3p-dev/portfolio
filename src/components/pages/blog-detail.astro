@@ -2,14 +2,9 @@
 import { getRelativeLocaleUrl } from 'astro:i18n'
 import { render } from 'astro:content'
 
-import {
-	canonical as canonicalUrl,
-	pageTitle,
-	schema,
-	type PageSeo
-} from '@lib/seo'
+import { canonical as canonicalUrl, schema, type PageSeo } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
-import { formatDate, isoDay, type Blog } from '@lib/content'
+import { entrySlug, formatDate, isoDay, type Blog } from '@lib/content'
 import { Badge, Icon, ReadingIndicator } from '@components/atoms'
 import { AppLayout } from '@components/layouts'
 import { ImageLightbox, Toc } from '@components/organisms'
@@ -25,7 +20,7 @@ const t = useTranslations(locale)
 
 const { Content, headings } = await render(blog)
 
-const path = `/blogs/${blog.id}`
+const path = `/blogs/${entrySlug(blog.id)}`
 const canonical = canonicalUrl(path, locale)
 const published = isoDay(blog.data.date)
 const modified = blog.data.updated ? isoDay(blog.data.updated) : published
@@ -33,7 +28,7 @@ const modified = blog.data.updated ? isoDay(blog.data.updated) : published
 const seo: PageSeo = {
 	path,
 	locale,
-	title: pageTitle(blog.data.title),
+	title: blog.data.title,
 	description: blog.data.description,
 	type: 'article',
 	published,

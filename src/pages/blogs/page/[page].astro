@@ -6,7 +6,7 @@ import { allBlogs, blogPage, totalPages } from '../../../lib/content/utils'
 import { defaultLocale } from '@lib/i18n'
 
 export const getStaticPaths = (async () => {
-	const blogs = await allBlogs()
+	const blogs = await allBlogs(defaultLocale)
 	const pages = totalPages(blogs.length)
 
 	const numbers = Array.from({ length: Math.max(0, pages - 1) }, (_, index) => index + 2)

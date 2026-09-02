@@ -1,6 +1,6 @@
 # r3p.dev
 
-Personal portfolio and blog of **Muhamad Repiyan** — projects, writing on
+Personal portfolio and blog of **Muhamad Repiyan**: projects, writing on
 infrastructure and web development, and a guestbook.
 
 Built with [Astro](https://astro.build), TypeScript, and Tailwind CSS v4.
@@ -10,7 +10,7 @@ Live at **[r3p.dev](https://r3p.dev)**.
 
 | Layer     | Choice                                                              |
 | :-------- | :------------------------------------------------------------------ |
-| Framework | Astro 7 — static output, Node standalone adapter for dynamic routes |
+| Framework | Astro 7, static output, Node standalone adapter for dynamic routes |
 | Language  | TypeScript (`astro/tsconfigs/strictest`)                            |
 | Styling   | Tailwind CSS v4 via `@tailwindcss/vite`, OKLCH design tokens        |
 | Content   | MDX content collections with Zod schemas                            |
@@ -34,7 +34,7 @@ bun dev          # http://localhost:4321
 | `bun dev`        | Dev server at `localhost:4321`             |
 | `bun run build`  | Production build to `./dist/`              |
 | `bun preview`    | Preview the production build locally       |
-| `bun run check`  | `astro check` — typecheck `.astro` and TS  |
+| `bun run check`  | `astro check`, typecheck `.astro` and TS  |
 
 CI runs `check` then `build` on every push and pull request.
 
@@ -43,7 +43,7 @@ CI runs `check` then `build` on every push and pull request.
 ### Rendering
 
 The site is **static by default**. Only the guestbook opts out via
-`export const prerender = false`, which is why the Node adapter is present —
+`export const prerender = false`, which is why the Node adapter is present:
 `bun run dist/server/entry.mjs` serves the prerendered pages plus that one
 dynamic route.
 
@@ -51,7 +51,7 @@ dynamic route.
 
 | Route                        | Notes                                |
 | :--------------------------- | :----------------------------------- |
-| `/`                          | Home — bio, experience, skills       |
+| `/`                          | Home, bio, experience, skills        |
 | `/projects`, `/projects/:id` | Project collection                   |
 | `/blogs`, `/blogs/:id`       | Paginated at `/blogs/page/:n`        |
 | `/tags`, `/tags/:tag`        | Cross-collection tag index           |
@@ -67,20 +67,28 @@ Page routes are mirrored under `/id/` (see [i18n](#internationalization)); the
 Three collections defined in [`src/content.config.ts`](src/content.config.ts),
 loaded from `src/contents/` as MDX and validated with Zod:
 
-- **`blogs`** — `title`, `description`, `date`, optional `updated`, `tags`,
+- **`blogs`**: `title`, `description`, `date`, optional `updated`, `tags`,
   `cover`, `draft`
-- **`projects`** — the above plus optional `repository`, `demo`, and a `wip` flag
-- **`now`** — one file per locale, just `updatedAt`
+- **`projects`**: the above plus optional `repository`, `demo`, and a `wip` flag
+- **`now`**: one file per locale, just `updatedAt`
+
+`blogs` and `projects` are translated per entry: each one is a directory named
+after its slug, holding one file per locale (`vps-setup-1/en.mdx`,
+`vps-setup-1/id.mdx`). Entry ids are therefore `<slug>/<locale>`, and
+`entrySlug()` in [`src/lib/content/`](src/lib/content/) strips the locale back
+off for URLs. `allBlogs(locale)` and `allProjects(locale)` return one entry per
+slug, falling back to the default locale when a translation does not exist yet,
+so an untranslated post still renders instead of 404ing.
 
 The Markdown pipeline adds a few local plugins from [`src/plugins/`](src/plugins/):
 
-- `rehype-demote-headings` — shifts authored `h1`–`h5` down one level so the
+- `rehype-demote-headings`: shifts authored `h1`–`h5` down one level so the
   page's real `h1` stays unique
-- `rehype-scrollable-tables` — wraps tables in a horizontally scrollable
+- `rehype-scrollable-tables`: wraps tables in a horizontally scrollable
   container instead of letting them overflow the page
-- `shiki-code-blocks` — Shiki transformer for code block chrome and
+- `shiki-code-blocks`: Shiki transformer for code block chrome and
   `output`-language blocks
-- `content-dates` — reads frontmatter at config time to emit accurate
+- `content-dates`: reads frontmatter at config time to emit accurate
   `lastmod` values in the sitemap
 
 Code blocks use dual Shiki themes (`github-light-default` / `github-dark-default`)
@@ -91,9 +99,12 @@ that switch with the site theme.
 English is the default locale and is unprefixed; Indonesian lives under `/id/`.
 
 Messages are plain typed objects in [`src/lib/i18n/`](src/lib/i18n/). `en.ts` is
-the source of truth — `MessageKey` is derived from it, and `id.ts` is declared
+the source of truth: `MessageKey` is derived from it, and `id.ts` is declared
 `: Messages`, so a missing or misspelled translation key is a **type error**,
 caught by `bun run check`.
+
+Long-form content is translated the same way, one MDX file per locale beside
+each other (see [Content](#content)).
 
 ### SEO
 
@@ -109,7 +120,7 @@ The only stateful part of the site. Entries are stored in SQLite via
 
 Submissions are handled with POST-redirect-GET and are protected by a honeypot
 field, length validation, and suppression of identical `(name, message)` pairs
-submitted within the same hour. No JavaScript is required to sign it — the form
+submitted within the same hour. No JavaScript is required to sign it: the form
 works as a plain HTML `POST`.
 
 ### Theming
@@ -119,10 +130,11 @@ Light and dark palettes are OKLCH custom properties in
 small inline script in `<head>` applies the stored preference before first paint
 to avoid a flash. Users can pick light, dark, or system.
 
-Colors are tuned to meet **WCAG AA (4.5:1)** contrast. Note that the light
-palette has almost no headroom — `--muted-foreground` is 4.73:1 on the
-background — so subtle text uses the dedicated `--muted-foreground-subtle`
-token rather than a Tailwind alpha modifier, which would silently fail AA.
+Colors are tuned to meet **WCAG AA (4.5:1)** contrast, with the two palettes
+kept at comparable ratios rather than each drifting on its own. Body text
+(`--muted-foreground`) sits at roughly 7.5:1 in both themes and dimmer text uses
+the dedicated `--muted-foreground-subtle` token (around 5.4:1) rather than a
+Tailwind alpha modifier, which would silently fail AA.
 
 ### Performance
 
@@ -144,7 +156,7 @@ src/
 │   ├── atoms/    # Button, Card, Badge, Icon, ...
 │   ├── molecules/
 │   ├── organisms/# Nav, pagination, lightbox, TOC
-│   ├── layouts/  # AppLayout — <head>, nav, footer
+│   ├── layouts/  # AppLayout: <head>, nav, footer
 │   └── pages/    # Page-level composition, kept out of src/pages
 ├── contents/     # MDX source for blogs, projects, now
 ├── lib/
@@ -181,8 +193,8 @@ production-only dependencies, and runs the compiled server as the non-root
 
 Deployment is automated in [`.github/workflows/`](.github/workflows/):
 
-- **CI** — typecheck and build on push and pull requests.
-- **CD** — on a successful CI run against `main`, builds and pushes the image to
+- **CI**: typecheck and build on push and pull requests.
+- **CD**: on a successful CI run against `main`, builds and pushes the image to
   GHCR, then deploys over SSH: the VPS pulls by digest, restarts the
   `portfolio` systemd user service under Podman, and polls a health endpoint.
   If the service fails to come up, it **automatically rolls back** to the

@@ -6,7 +6,7 @@ import {
 	type PageSeo
 } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
-import type { Blog } from '@lib/content'
+import { entrySlug, type Blog } from '@lib/content'
 import { AppLayout } from '@components/layouts'
 import { BlogList } from '@components/organisms'
 
@@ -23,8 +23,8 @@ const t = useTranslations(locale)
 
 const path = `/blogs/page/${page}`
 const canonical = canonicalUrl(path, locale)
-const title = `${t('page_blogs_title')} — page ${page} — r3p.dev`
-const description = `Page ${page} of writing on infrastructure, containers, Linux servers, and web development on r3p.dev.`
+const title = `${t('page_blogs_title')} · ${t('pagination_page_n', { page })}`
+const description = t('seo_blogs_page_description', { page })
 
 const seo: PageSeo = {
 	path,
@@ -52,7 +52,7 @@ const seo: PageSeo = {
 			canonical,
 			blogs.map((blog) => ({
 				name: blog.data.title,
-				path: getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)
+				path: getRelativeLocaleUrl(locale, `/blogs/${entrySlug(blog.id)}`)
 			}))
 		)
 	],

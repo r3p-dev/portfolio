@@ -6,9 +6,13 @@ import { allTags, taggedEntries } from '../../lib/content/utils'
 import { defaultLocale } from '@lib/i18n'
 
 export const getStaticPaths = (async () => {
-	const tags = await allTags()
+	const tags = await allTags(defaultLocale)
 	const byTag = new Map(
-		await Promise.all(tags.map(async (tag) => [tag, await taggedEntries(tag)] as const))
+		await Promise.all(
+			tags.map(
+				async (tag) => [tag, await taggedEntries(tag, defaultLocale)] as const
+			)
+		)
 	)
 
 	return tags.map((tag) => ({ params: { slug: tag }, props: { tag, items: byTag.get(tag)! } }))

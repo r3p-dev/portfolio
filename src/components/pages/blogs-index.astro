@@ -7,7 +7,7 @@ import {
 	type PageSeo
 } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
-import { allBlogs, blogPage } from '@lib/content'
+import { allBlogs, blogPage, entrySlug } from '@lib/content'
 import { BlogList } from '@components/organisms'
 
 interface Props {
@@ -17,11 +17,10 @@ interface Props {
 const { locale } = Astro.props
 const t = useTranslations(locale)
 
-const result = blogPage(await allBlogs(), 1)
+const result = blogPage(await allBlogs(locale), 1)
 
-const title = `${t('page_blogs_title')} — r3p.dev`
-const description =
-	'Writing on infrastructure, containers, Linux servers, and web development — notes from building and running things in production.'
+const title = t('page_blogs_title')
+const description = t('seo_blogs_description')
 const canonical = canonicalUrl('/blogs', locale)
 
 const seo: PageSeo = {
@@ -46,7 +45,7 @@ const seo: PageSeo = {
 			canonical,
 			result.blogs.map((blog) => ({
 				name: blog.data.title,
-				path: getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)
+				path: getRelativeLocaleUrl(locale, `/blogs/${entrySlug(blog.id)}`)
 			}))
 		)
 	],

@@ -21,8 +21,12 @@ const t = useTranslations(locale)
 
 const path = `/tags/${tag}`
 const canonical = canonicalUrl(path, locale)
-const title = `${tag} — ${t('page_tags_title')} — r3p.dev`
-const description = `Every project and post on r3p.dev tagged "${tag}" — ${items.length} ${items.length === 1 ? 'entry' : 'entries'} on infrastructure, tooling, and web development.`
+const title = `${tag} · ${t('page_tags_title')}`
+const entries =
+	items.length === 1
+		? t('tags_entry_count_one', { count: items.length })
+		: t('tags_entry_count_other', { count: items.length })
+const description = t('seo_tag_description', { tag, entries })
 
 const seo: PageSeo = {
 	path,

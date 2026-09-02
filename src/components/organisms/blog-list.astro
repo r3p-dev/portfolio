@@ -1,7 +1,7 @@
 ---
 import { getRelativeLocaleUrl } from 'astro:i18n'
 import { useTranslations, type Locale } from '@lib/i18n'
-import type { Blog } from '@lib/content'
+import { entrySlug, type Blog } from '@lib/content'
 import { EntryCard } from '@components/molecules'
 import Pagination from './pagination.astro'
 
@@ -32,7 +32,7 @@ const countLabel =
 		{
 			blogs.map((blog) => (
 				<EntryCard
-					href={getRelativeLocaleUrl(locale, `/blogs/${blog.id}`)}
+					href={getRelativeLocaleUrl(locale, `/blogs/${entrySlug(blog.id)}`)}
 					title={blog.data.title}
 					description={blog.data.description}
 					date={blog.data.date}

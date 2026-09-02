@@ -43,7 +43,7 @@ const year = new Date().getFullYear()
 		<link
 			rel="alternate"
 			type="application/rss+xml"
-			title={`${SITE.name} — ${t('page_blogs_title')}`}
+			title={`${SITE.name} · ${t('page_blogs_title')}`}
 			href="/rss.xml"
 		/>
 		<link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
@@ -83,7 +83,7 @@ const year = new Date().getFullYear()
 
 			<footer
 				class:list={[
-					'mx-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-6 pt-8 pb-32 text-sm text-muted-foreground',
+					'mx-auto flex flex-col flex-wrap items-center justify-center gap-x-4 gap-y-2 px-6 pt-8 pb-32 text-center text-sm text-muted-foreground sm:flex-row',
 					measure
 				]}
 			>
