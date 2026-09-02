@@ -84,6 +84,8 @@ export const en = {
 	home_blogs_heading: 'Blogs',
 	home_blogs_lead: 'Thoughts, ideas, and things worth documenting.',
 	home_view_all: 'View All',
+	home_view_all_projects: 'View all projects',
+	home_view_all_blogs: 'View all blog posts',
 	blogs_lead:
 		'A space for thoughts, observations, and things worth documenting. Covering technology, creativity, workflows, ideas, and everything in between.',
 	projects_lead:

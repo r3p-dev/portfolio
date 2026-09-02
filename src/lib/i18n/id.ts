@@ -85,6 +85,8 @@ export const id: Messages = {
 	home_blogs_heading: 'Blog',
 	home_blogs_lead: 'Pemikiran, ide, dan hal-hal yang layak dicatat.',
 	home_view_all: 'Lihat Semua',
+	home_view_all_projects: 'Lihat semua proyek',
+	home_view_all_blogs: 'Lihat semua tulisan blog',
 	blogs_lead:
 		'Ruang untuk pemikiran, pengamatan, dan hal-hal yang layak dicatat. Membahas teknologi, kreativitas, alur kerja, ide, dan segala sesuatu di antaranya.',
 	projects_lead:

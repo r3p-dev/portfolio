@@ -31,6 +31,8 @@ export default defineConfig({
 	adapter: node({ mode: 'standalone' }),
 	i18n: I18N,
 
+	build: { inlineStylesheets: 'always' },
+
 	fonts: [
 		{
 			provider: fontProviders.fontsource(),

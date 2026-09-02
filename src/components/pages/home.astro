@@ -70,6 +70,7 @@ const seo: PageSeo = {
 						alt={`${SITE.name} logo`}
 						width={56}
 						height={56}
+						densities={[1, 2, 3]}
 						loading="eager"
 						class="brand-logo size-14"
 					/>
@@ -152,7 +153,7 @@ const seo: PageSeo = {
 							<span class="text-muted-foreground">{experience.company}</span>
 						</div>
 
-						<p class="mt-1 text-xs text-muted-foreground/70">
+						<p class="mt-1 text-xs text-muted-foreground-subtle">
 							{experience.duration}
 						</p>
 
@@ -211,6 +212,7 @@ const seo: PageSeo = {
 					href={getRelativeLocaleUrl(locale, '/projects')}
 					variant="outline"
 					class="w-fit gap-2 text-foreground"
+					aria-label={t('home_view_all_projects')}
 				>
 					{t('home_view_all')}
 					<Icon name="arrow-right" class="size-4" />
@@ -271,6 +273,7 @@ const seo: PageSeo = {
 					href={getRelativeLocaleUrl(locale, '/blogs')}
 					variant="outline"
 					class="w-fit gap-2 text-foreground"
+					aria-label={t('home_view_all_blogs')}
 				>
 					{t('home_view_all')}
 					<Icon name="arrow-right" class="size-4" />
