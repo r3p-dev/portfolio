@@ -6,18 +6,18 @@ import { allBlogs, entrySlug } from '../../../lib/content/utils'
 import { langParams } from '../../../lib/routes'
 
 export const getStaticPaths = (async () => {
-	const pages = await Promise.all(
-		langParams().map(async ({ params, props }) => {
-			const blogs = await allBlogs(props.locale)
+  const pages = await Promise.all(
+    langParams().map(async ({ params, props }) => {
+      const blogs = await allBlogs(props.locale)
 
-			return blogs.map((blog) => ({
-				params: { ...params, slug: entrySlug(blog.id) },
-				props: { ...props, blog }
-			}))
-		})
-	)
+      return blogs.map((blog) => ({
+        params: { ...params, slug: entrySlug(blog.id) },
+        props: { ...props, blog },
+      }))
+    }),
+  )
 
-	return pages.flat()
+  return pages.flat()
 }) satisfies GetStaticPaths
 
 const { locale, blog } = Astro.props

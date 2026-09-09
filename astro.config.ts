@@ -14,107 +14,102 @@ import { contentDates } from '@plugins/content-dates'
 const SITE_URL = 'https://r3p.dev'
 
 const I18N = {
-	defaultLocale: 'en',
-	locales: ['en', 'id'],
-	routing: { prefixDefaultLocale: false }
+  defaultLocale: 'en',
+  locales: ['en', 'id'],
+  routing: { prefixDefaultLocale: false },
 }
 
 const DATES = contentDates(I18N.locales)
 
 export default defineConfig({
-	devToolbar: { enabled: false },
+  devToolbar: { enabled: false },
 
-	site: SITE_URL,
-	output: 'static',
-	trailingSlash: 'never',
-	prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
-	adapter: node({ mode: 'standalone' }),
-	i18n: I18N,
+  site: SITE_URL,
+  output: 'static',
+  trailingSlash: 'never',
+  prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
+  adapter: node({ mode: 'standalone' }),
+  i18n: I18N,
 
-	build: { inlineStylesheets: 'always' },
+  build: { inlineStylesheets: 'always' },
 
-	fonts: [
-		{
-			provider: fontProviders.fontsource(),
-			name: 'JetBrains Mono',
-			cssVariable: '--font-jetbrains-mono',
-			weights: ['100 800'],
-			styles: ['normal'],
-			subsets: ['latin'],
-			fallbacks: ['monospace'],
-			optimizedFallbacks: true
-		}
-	],
+  fonts: [
+    {
+      provider: fontProviders.fontsource(),
+      name: 'JetBrains Mono',
+      cssVariable: '--font-jetbrains-mono',
+      weights: ['100 800'],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['monospace'],
+      optimizedFallbacks: true,
+    },
+  ],
 
-	integrations: [
-		mdx(),
-		sitemap({
-			changefreq: 'weekly',
-			i18n: {
-				defaultLocale: I18N.defaultLocale,
-				locales: Object.fromEntries(
-					I18N.locales.map((locale) => [locale, locale])
-				)
-			},
-			customPages: I18N.locales.map((locale) =>
-				locale === I18N.defaultLocale
-					? `${SITE_URL}/guestbook`
-					: `${SITE_URL}/${locale}/guestbook`
-			),
+  integrations: [
+    mdx(),
+    sitemap({
+      changefreq: 'weekly',
+      i18n: {
+        defaultLocale: I18N.defaultLocale,
+        locales: Object.fromEntries(I18N.locales.map((locale) => [locale, locale])),
+      },
+      customPages: I18N.locales.map((locale) =>
+        locale === I18N.defaultLocale ? `${SITE_URL}/guestbook` : `${SITE_URL}/${locale}/guestbook`,
+      ),
 
-			serialize(item) {
-				const path =
-					new URL(item.url).pathname.replace(/^\/id(?=\/|$)/, '') || '/'
-				const lastmod = DATES[path]
+      serialize(item) {
+        const path = new URL(item.url).pathname.replace(/^\/id(?=\/|$)/, '') || '/'
+        const lastmod = DATES[path]
 
-				return {
-					...item,
-					...(lastmod && { lastmod: `${lastmod}T00:00:00.000Z` }),
-					priority: path === '/' ? 1 : path.split('/').length > 2 ? 0.6 : 0.8
-				}
-			}
-		})
-	],
+        return {
+          ...item,
+          ...(lastmod && { lastmod: `${lastmod}T00:00:00.000Z` }),
+          priority: path === '/' ? 1 : path.split('/').length > 2 ? 0.6 : 0.8,
+        }
+      },
+    }),
+  ],
 
-	markdown: {
-		processor: unified({
-			rehypePlugins: [
-				rehypeDemoteHeadings,
-				rehypeHeadingIds,
-				rehypeScrollableTables,
-				[
-					rehypeAutolinkHeadings,
-					{
-						behavior: 'append',
-						properties: {
-							className: ['heading-anchor'],
-							ariaHidden: 'true',
-							tabIndex: -1
-						},
-						content: []
-					}
-				]
-			]
-		}),
+  markdown: {
+    processor: unified({
+      rehypePlugins: [
+        rehypeDemoteHeadings,
+        rehypeHeadingIds,
+        rehypeScrollableTables,
+        [
+          rehypeAutolinkHeadings,
+          {
+            behavior: 'append',
+            properties: {
+              className: ['heading-anchor'],
+              ariaHidden: 'true',
+              tabIndex: -1,
+            },
+            content: [],
+          },
+        ],
+      ],
+    }),
 
-		syntaxHighlight: 'shiki',
-		shikiConfig: {
-			wrap: false,
-			transformers: [shikiCodeBlocks],
+    syntaxHighlight: 'shiki',
+    shikiConfig: {
+      wrap: false,
+      transformers: [shikiCodeBlocks],
 
-			themes: {
-				light: 'github-light-default',
-				dark: 'github-dark-default'
-			},
+      themes: {
+        light: 'github-light-default',
+        dark: 'github-dark-default',
+      },
 
-			langAlias: {
-				output: 'text',
-				caddy: 'text'
-			}
-		}
-	},
+      langAlias: {
+        output: 'text',
+        caddy: 'text',
+      },
+    },
+  },
 
-	vite: {
-		plugins: [tailwindcss()]
-	}
+  vite: {
+    plugins: [tailwindcss()],
+  },
 })

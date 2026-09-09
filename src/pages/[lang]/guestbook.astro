@@ -10,15 +10,11 @@ const locale = toLocale(Astro.currentLocale)
 let state = EMPTY_STATE
 
 if (Astro.request.method === 'POST') {
-	const result = await handleSubmission(
-		Astro.request,
-		Astro.cookies,
-		Astro.url.pathname
-	)
+  const result = await handleSubmission(Astro.request, Astro.cookies, Astro.url.pathname)
 
-	if (result instanceof Response) return result
+  if (result instanceof Response) return result
 
-	state = result
+  state = result
 }
 
 const view = readView(Astro.url, state)

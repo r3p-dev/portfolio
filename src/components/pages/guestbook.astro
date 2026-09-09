@@ -5,19 +5,14 @@ import { Badge, Button, Card, CardContent, Icon } from '@components/atoms'
 import { GuestbookFields } from '@components/molecules'
 import { canonical as canonicalUrl, schema, type PageSeo } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
-import {
-	EMPTY_STATE,
-	type GuestbookNotice,
-	type GuestbookState,
-	recentEntries
-} from '@lib/server'
+import { EMPTY_STATE, type GuestbookNotice, type GuestbookState, recentEntries } from '@lib/server'
 
 interface Props {
-	locale: Locale
-	state?: GuestbookState
-	editing?: number | undefined
-	notice?: GuestbookNotice | undefined
-	owner?: string | undefined
+  locale: Locale
+  state?: GuestbookState
+  editing?: number | undefined
+  notice?: GuestbookNotice | undefined
+  owner?: string | undefined
 }
 
 const { locale, state = EMPTY_STATE, editing, notice, owner } = Astro.props
@@ -28,37 +23,37 @@ const entries = recentEntries()
 
 const title = t('guestbook_title')
 const description =
-	'Leave a note if you stopped by. A small, plain guestbook for visitors to say hello, share feedback, or just sign their name.'
+  'Leave a note if you stopped by. A small, plain guestbook for visitors to say hello, share feedback, or just sign their name.'
 const canonical = canonicalUrl('/guestbook', locale)
 
 const seo: PageSeo = {
-	path: '/guestbook',
-	locale,
-	title,
-	description,
-	jsonLd: [
-		...schema.siteNodes(description),
-		schema.webPage({ canonical, name: title, description, breadcrumb: true }),
-		schema.breadcrumbList(canonical, [
-			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
-			{
-				name: t('guestbook_title'),
-				path: getRelativeLocaleUrl(locale, '/guestbook')
-			}
-		])
-	]
+  path: '/guestbook',
+  locale,
+  title,
+  description,
+  jsonLd: [
+    ...schema.siteNodes(description),
+    schema.webPage({ canonical, name: title, description, breadcrumb: true }),
+    schema.breadcrumbList(canonical, [
+      { name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+      {
+        name: t('guestbook_title'),
+        path: getRelativeLocaleUrl(locale, '/guestbook'),
+      },
+    ]),
+  ],
 }
 
 const countLabel =
-	entries.length === 1
-		? t('guestbook_note_count_one', { count: entries.length })
-		: t('guestbook_note_count_other', { count: entries.length })
+  entries.length === 1
+    ? t('guestbook_note_count_one', { count: entries.length })
+    : t('guestbook_note_count_other', { count: entries.length })
 
 const noticeText: Record<GuestbookNotice, string> = {
-	signed: t('guestbook_thanks'),
-	updated: t('guestbook_updated'),
-	deleted: t('guestbook_deleted'),
-	not_allowed: t('guestbook_not_allowed')
+  signed: t('guestbook_thanks'),
+  updated: t('guestbook_updated'),
+  deleted: t('guestbook_deleted'),
+  not_allowed: t('guestbook_not_allowed'),
 }
 
 const signState = state.editing === undefined ? state : EMPTY_STATE
@@ -67,214 +62,193 @@ const path = Astro.url.pathname
 const asDate = (iso: string) => new Date(`${iso.replace(' ', 'T')}Z`)
 
 const formatDate = (iso: string) =>
-	new Intl.DateTimeFormat(locale === 'id' ? 'id-ID' : 'en-GB', {
-		day: '2-digit',
-		month: 'short',
-		year: 'numeric',
-		timeZone: 'UTC'
-	}).format(asDate(iso))
+  new Intl.DateTimeFormat(locale === 'id' ? 'id-ID' : 'en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(asDate(iso))
 
 const ownerAction =
-	'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4'
+  'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-all outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4'
 ---
 
 <AppLayout seo={seo}>
-	<div class="space-y-12">
-		<div class="space-y-4">
-			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-				{t('guestbook_title')}
-			</h1>
-			<p class="max-w-prose text-muted-foreground">{t('guestbook_lead')}</p>
-		</div>
+  <div class="space-y-12">
+    <div class="space-y-4">
+      <h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+        {t('guestbook_title')}
+      </h1>
+      <p class="max-w-prose text-muted-foreground">{t('guestbook_lead')}</p>
+    </div>
 
-		<section class="space-y-4" aria-labelledby="sign-heading">
-			<h2 id="sign-heading" class="text-xl font-semibold text-foreground">
-				{t('guestbook_sign_heading')}
-			</h2>
+    <section class="space-y-4" aria-labelledby="sign-heading">
+      <h2 id="sign-heading" class="text-xl font-semibold text-foreground">
+        {t('guestbook_sign_heading')}
+      </h2>
 
-			{
-				notice && (
-					<p
-						role={notice === 'not_allowed' ? 'alert' : 'status'}
-						class:list={[
-							'rounded-lg border px-4 py-3 text-sm',
-							notice === 'not_allowed'
-								? 'border-destructive/40 bg-card text-destructive'
-								: 'border-border bg-card text-foreground'
-						]}
-					>
-						{noticeText[notice]}
-					</p>
-				)
-			}
+      {notice && (
+        <p
+          role={notice === 'not_allowed' ? 'alert' : 'status'}
+          class:list={[
+            'rounded-lg border px-4 py-3 text-sm',
+            notice === 'not_allowed'
+              ? 'border-destructive/40 bg-card text-destructive'
+              : 'border-border bg-card text-foreground',
+          ]}
+        >
+          {noticeText[notice]}
+        </p>
+      )}
 
-			<form method="POST" class="w-full space-y-4">
-				<GuestbookFields
-					locale={locale}
-					id="sign"
-					values={signState.values}
-					errors={signState.errors}
-				/>
+      <form method="POST" class="w-full space-y-4">
+        <GuestbookFields
+          locale={locale}
+          id="sign"
+          values={signState.values}
+          errors={signState.errors}
+        />
 
-				<div hidden aria-hidden="true">
-					<label for="website">{t('guestbook_honeypot')}</label>
-					<input
-						id="website"
-						name="website"
-						type="text"
-						tabindex="-1"
-						autocomplete="off"
-					/>
-				</div>
+        <div hidden aria-hidden="true">
+          <label for="website">{t('guestbook_honeypot')}</label>
+          <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+        </div>
 
-				<Button type="submit">{t('guestbook_submit')}</Button>
-			</form>
+        <Button type="submit">{t('guestbook_submit')}</Button>
+      </form>
 
-			<p class="max-w-prose text-xs text-muted-foreground">
-				{t('guestbook_ownership_hint')}
-			</p>
-		</section>
+      <p class="max-w-prose text-xs text-muted-foreground">{t('guestbook_ownership_hint')}</p>
+    </section>
 
-		<section class="space-y-4" aria-labelledby="entries-heading" id="entries">
-			<h2 id="entries-heading" class="text-xl font-semibold text-foreground">
-				{countLabel}
-			</h2>
+    <section class="space-y-4" aria-labelledby="entries-heading" id="entries">
+      <h2 id="entries-heading" class="text-xl font-semibold text-foreground">
+        {countLabel}
+      </h2>
 
-			{
-				entries.length === 0 ? (
-					<p class="text-muted-foreground">{t('guestbook_empty')}</p>
-				) : (
-					<ul class="space-y-4">
-						{entries.map((entry) => {
-							const mine = owner !== undefined && entry.owner === owner
-							const open = mine && editing === entry.id
-							const deleteForm = `delete-entry-${entry.id}`
+      {entries.length === 0 ? (
+        <p class="text-muted-foreground">{t('guestbook_empty')}</p>
+      ) : (
+        <ul class="space-y-4">
+          {entries.map((entry) => {
+            const mine = owner !== undefined && entry.owner === owner
+            const open = mine && editing === entry.id
+            const deleteForm = `delete-entry-${entry.id}`
 
-							const values =
-								state.editing === entry.id
-									? state.values
-									: { name: entry.name, message: entry.message }
+            const values =
+              state.editing === entry.id
+                ? state.values
+                : { name: entry.name, message: entry.message }
 
-							const errors = state.editing === entry.id ? state.errors : {}
+            const errors = state.editing === entry.id ? state.errors : {}
 
-							return (
-								<li id={`entry-${entry.id}`} class="scroll-mt-24">
-									<Card>
-										<CardContent class="space-y-2">
-											<div class="flex flex-wrap items-baseline justify-between gap-2">
-												<span class="flex items-baseline gap-2 font-medium text-foreground">
-													{entry.name}
-													{mine && (
-														<Badge variant="secondary">
-															{t('guestbook_yours')}
-														</Badge>
-													)}
-												</span>
-												<time
-													datetime={asDate(
-														entry.updated_at ?? entry.created_at
-													).toISOString()}
-													class="text-xs text-muted-foreground"
-												>
-													{formatDate(entry.created_at)}
-													{entry.updated_at && ` · ${t('guestbook_edited')}`}
-												</time>
-											</div>
+            return (
+              <li id={`entry-${entry.id}`} class="scroll-mt-24">
+                <Card>
+                  <CardContent class="space-y-2">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                      <span class="flex items-baseline gap-2 font-medium text-foreground">
+                        {entry.name}
+                        {mine && <Badge variant="secondary">{t('guestbook_yours')}</Badge>}
+                      </span>
+                      <time
+                        datetime={asDate(entry.updated_at ?? entry.created_at).toISOString()}
+                        class="text-xs text-muted-foreground"
+                      >
+                        {formatDate(entry.created_at)}
+                        {entry.updated_at && ` · ${t('guestbook_edited')}`}
+                      </time>
+                    </div>
 
-											{open ? (
-												<form
-													method="POST"
-													class="space-y-4 pt-2"
-													aria-label={t('guestbook_edit_note')}
-												>
-													<input type="hidden" name="intent" value="update" />
-													<input type="hidden" name="id" value={entry.id} />
+                    {open ? (
+                      <form
+                        method="POST"
+                        class="space-y-4 pt-2"
+                        aria-label={t('guestbook_edit_note')}
+                      >
+                        <input type="hidden" name="intent" value="update" />
+                        <input type="hidden" name="id" value={entry.id} />
 
-													<GuestbookFields
-														locale={locale}
-														id={`entry-${entry.id}`}
-														values={values}
-														errors={errors}
-														autofocus
-													/>
+                        <GuestbookFields
+                          locale={locale}
+                          id={`entry-${entry.id}`}
+                          values={values}
+                          errors={errors}
+                          autofocus
+                        />
 
-													<div class="flex flex-wrap items-center gap-2">
-														<Button type="submit">{t('guestbook_save')}</Button>
-														<Button
-															href={`${path}#entry-${entry.id}`}
-															variant="ghost"
-														>
-															{t('guestbook_cancel')}
-														</Button>
-														<button
-															type="submit"
-															form={deleteForm}
-															class={`${ownerAction} ml-auto text-destructive hover:bg-destructive/10`}
-														>
-															<Icon name="trash" />
-															{t('guestbook_delete')}
-														</button>
-													</div>
-												</form>
-											) : (
-												<p class="text-sm wrap-break-word whitespace-pre-line text-muted-foreground">
-													{entry.message}
-												</p>
-											)}
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Button type="submit">{t('guestbook_save')}</Button>
+                          <Button href={`${path}#entry-${entry.id}`} variant="ghost">
+                            {t('guestbook_cancel')}
+                          </Button>
+                          <button
+                            type="submit"
+                            form={deleteForm}
+                            class={`${ownerAction} ml-auto text-destructive hover:bg-destructive/10`}
+                          >
+                            <Icon name="trash" />
+                            {t('guestbook_delete')}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <p class="text-sm wrap-break-word whitespace-pre-line text-muted-foreground">
+                        {entry.message}
+                      </p>
+                    )}
 
-											{mine && !open && (
-												<div class="flex flex-wrap items-center gap-1 pt-1">
-													<a
-														href={`${path}?edit=${entry.id}#entry-${entry.id}`}
-														class={`${ownerAction} text-muted-foreground hover:bg-muted hover:text-foreground`}
-														aria-label={t('guestbook_edit_note')}
-													>
-														<Icon name="pencil" />
-														{t('guestbook_edit')}
-													</a>
-													<button
-														type="submit"
-														form={deleteForm}
-														class={`${ownerAction} text-destructive hover:bg-destructive/10`}
-														aria-label={t('guestbook_delete_note')}
-													>
-														<Icon name="trash" />
-														{t('guestbook_delete')}
-													</button>
-												</div>
-											)}
-										</CardContent>
+                    {mine && !open && (
+                      <div class="flex flex-wrap items-center gap-1 pt-1">
+                        <a
+                          href={`${path}?edit=${entry.id}#entry-${entry.id}`}
+                          class={`${ownerAction} text-muted-foreground hover:bg-muted hover:text-foreground`}
+                          aria-label={t('guestbook_edit_note')}
+                        >
+                          <Icon name="pencil" />
+                          {t('guestbook_edit')}
+                        </a>
+                        <button
+                          type="submit"
+                          form={deleteForm}
+                          class={`${ownerAction} text-destructive hover:bg-destructive/10`}
+                          aria-label={t('guestbook_delete_note')}
+                        >
+                          <Icon name="trash" />
+                          {t('guestbook_delete')}
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
 
-										{mine && (
-											<form
-												method="POST"
-												id={deleteForm}
-												data-confirm={t('guestbook_delete_confirm')}
-												hidden
-											>
-												<input type="hidden" name="intent" value="delete" />
-												<input type="hidden" name="id" value={entry.id} />
-											</form>
-										)}
-									</Card>
-								</li>
-							)
-						})}
-					</ul>
-				)
-			}
-		</section>
-	</div>
+                  {mine && (
+                    <form
+                      method="POST"
+                      id={deleteForm}
+                      data-confirm={t('guestbook_delete_confirm')}
+                      hidden
+                    >
+                      <input type="hidden" name="intent" value="delete" />
+                      <input type="hidden" name="id" value={entry.id} />
+                    </form>
+                  )}
+                </Card>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  </div>
 </AppLayout>
 
 <script>
-	const forms = document.querySelectorAll<HTMLFormElement>('form[data-confirm]')
+  const forms = document.querySelectorAll<HTMLFormElement>('form[data-confirm]')
 
-	for (const form of forms) {
-		form.addEventListener('submit', (event) => {
-			if (!window.confirm(form.dataset.confirm ?? '')) {
-				event.preventDefault()
-			}
-		})
-	}
+  for (const form of forms) {
+    form.addEventListener('submit', (event) => {
+      if (!window.confirm(form.dataset.confirm ?? '')) {
+        event.preventDefault()
+      }
+    })
+  }
 </script>

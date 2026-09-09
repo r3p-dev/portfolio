@@ -2,16 +2,12 @@
 import { getRelativeLocaleUrl } from 'astro:i18n'
 import { AppLayout } from '@components/layouts'
 import { Badge } from '@components/atoms'
-import {
-	canonical as canonicalUrl,
-	schema,
-	type PageSeo
-} from '@lib/seo'
+import { canonical as canonicalUrl, schema, type PageSeo } from '@lib/seo'
 import { useTranslations, type Locale } from '@lib/i18n'
 import { allTags } from '@lib/content'
 
 interface Props {
-	locale: Locale
+  locale: Locale
 }
 
 const { locale } = Astro.props
@@ -24,46 +20,51 @@ const description = t('seo_tags_description', { count: tags.length })
 const canonical = canonicalUrl('/tags', locale)
 
 const seo: PageSeo = {
-	path: '/tags',
-	locale,
-	title,
-	description,
-	jsonLd: [
-		...schema.siteNodes(description),
-		schema.webPage({
-			canonical,
-			name: title,
-			description,
-			alsoTypes: ['CollectionPage'],
-			breadcrumb: true
-		}),
-		schema.breadcrumbList(canonical, [
-			{ name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
-			{ name: t('page_tags_title'), path: getRelativeLocaleUrl(locale, '/tags') }
-		])
-	]
+  path: '/tags',
+  locale,
+  title,
+  description,
+  jsonLd: [
+    ...schema.siteNodes(description),
+    schema.webPage({
+      canonical,
+      name: title,
+      description,
+      alsoTypes: ['CollectionPage'],
+      breadcrumb: true,
+    }),
+    schema.breadcrumbList(canonical, [
+      { name: t('nav_home'), path: getRelativeLocaleUrl(locale, '/') },
+      {
+        name: t('page_tags_title'),
+        path: getRelativeLocaleUrl(locale, '/tags'),
+      },
+    ]),
+  ],
 }
 ---
 
 <AppLayout seo={seo}>
-	<div class="space-y-12">
-		<div class="space-y-4">
-			<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-				{t('page_tags_title')}
-			</h1>
-			<p class="text-muted-foreground">{t('tags_lead')}</p>
-		</div>
+  <div class="space-y-12">
+    <div class="space-y-4">
+      <h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+        {t('page_tags_title')}
+      </h1>
+      <p class="text-muted-foreground">{t('tags_lead')}</p>
+    </div>
 
-		<ul class="flex flex-wrap gap-2">
-			{
-				tags.map((tag) => (
-					<li>
-						<Badge href={getRelativeLocaleUrl(locale, `/tags/${tag}`)} variant="secondary" class="h-8 text-lg">
-							{tag}
-						</Badge>
-					</li>
-				))
-			}
-		</ul>
-	</div>
+    <ul class="flex flex-wrap gap-2">
+      {tags.map((tag) => (
+        <li>
+          <Badge
+            href={getRelativeLocaleUrl(locale, `/tags/${tag}`)}
+            variant="secondary"
+            class="h-8 text-lg"
+          >
+            {tag}
+          </Badge>
+        </li>
+      ))}
+    </ul>
+  </div>
 </AppLayout>

@@ -6,12 +6,12 @@ import { allProjects, entrySlug } from '../../lib/content/utils'
 import { defaultLocale } from '@lib/i18n'
 
 export const getStaticPaths = (async () => {
-	const projects = await allProjects(defaultLocale)
+  const projects = await allProjects(defaultLocale)
 
-	return projects.map((project) => ({
-		params: { slug: entrySlug(project.id) },
-		props: { project }
-	}))
+  return projects.map((project) => ({
+    params: { slug: entrySlug(project.id) },
+    props: { project },
+  }))
 }) satisfies GetStaticPaths
 
 const { project } = Astro.props

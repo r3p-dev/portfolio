@@ -8,15 +8,15 @@ Live at **[r3p.dev](https://r3p.dev)**.
 
 ## Stack
 
-| Layer     | Choice                                                              |
-| :-------- | :------------------------------------------------------------------ |
+| Layer     | Choice                                                             |
+| :-------- | :----------------------------------------------------------------- |
 | Framework | Astro 7, static output, Node standalone adapter for dynamic routes |
-| Language  | TypeScript (`astro/tsconfigs/strictest`)                            |
-| Styling   | Tailwind CSS v4 via `@tailwindcss/vite`, OKLCH design tokens        |
-| Content   | MDX content collections with Zod schemas                            |
-| Runtime   | Bun                                                                 |
-| Database  | `node:sqlite` (guestbook only)                                      |
-| Deploy    | Docker → GHCR → VPS (Podman + systemd)                              |
+| Language  | TypeScript (`astro/tsconfigs/strictest`)                           |
+| Styling   | Tailwind CSS v4 via `@tailwindcss/vite`, OKLCH design tokens       |
+| Content   | MDX content collections with Zod schemas                           |
+| Runtime   | Bun                                                                |
+| Database  | `node:sqlite` (guestbook only)                                     |
+| Deploy    | Docker → GHCR → VPS (Podman + systemd)                             |
 
 ## Getting started
 
@@ -28,13 +28,13 @@ bun install
 bun dev          # http://localhost:4321
 ```
 
-| Command          | Action                                     |
-| :--------------- | :----------------------------------------- |
-| `bun install`    | Install dependencies                       |
-| `bun dev`        | Dev server at `localhost:4321`             |
-| `bun run build`  | Production build to `./dist/`              |
-| `bun preview`    | Preview the production build locally       |
-| `bun run check`  | `astro check`, typecheck `.astro` and TS  |
+| Command         | Action                                   |
+| :-------------- | :--------------------------------------- |
+| `bun install`   | Install dependencies                     |
+| `bun dev`       | Dev server at `localhost:4321`           |
+| `bun run build` | Production build to `./dist/`            |
+| `bun preview`   | Preview the production build locally     |
+| `bun run check` | `astro check`, typecheck `.astro` and TS |
 
 CI runs `check` then `build` on every push and pull request.
 
@@ -49,15 +49,15 @@ dynamic route.
 
 ### Routes
 
-| Route                        | Notes                                |
-| :--------------------------- | :----------------------------------- |
-| `/`                          | Home, bio, experience, skills        |
-| `/projects`, `/projects/:id` | Project collection                   |
-| `/blogs`, `/blogs/:id`       | Paginated at `/blogs/page/:n`        |
-| `/tags`, `/tags/:tag`        | Cross-collection tag index           |
-| `/now`                       | What I'm currently working on        |
-| `/guestbook`                 | Server-rendered, accepts `POST`      |
-| `/rss.xml`, `/robots.txt`    | Generated; sitemap via integration   |
+| Route                        | Notes                              |
+| :--------------------------- | :--------------------------------- |
+| `/`                          | Home, bio, experience, skills      |
+| `/projects`, `/projects/:id` | Project collection                 |
+| `/blogs`, `/blogs/:id`       | Paginated at `/blogs/page/:n`      |
+| `/tags`, `/tags/:tag`        | Cross-collection tag index         |
+| `/now`                       | What I'm currently working on      |
+| `/guestbook`                 | Server-rendered, accepts `POST`    |
+| `/rss.xml`, `/robots.txt`    | Generated; sitemap via integration |
 
 Page routes are mirrored under `/id/` (see [i18n](#internationalization)); the
 `rss.xml`, `robots.txt`, and sitemap endpoints are served once at the root.
@@ -177,11 +177,11 @@ Path aliases (`tsconfig.json`): `@assets/*`, `@components/*`, `@lib/*`,
 
 ## Configuration
 
-| Variable       | Default                | Purpose                        |
-| :------------- | :--------------------- | :----------------------------- |
-| `GUESTBOOK_DB` | `./data/guestbook.db`  | SQLite file path               |
-| `HOST`         | `0.0.0.0` (Docker)     | Server bind address            |
-| `PORT`         | `4321`                 | Server port                    |
+| Variable       | Default               | Purpose             |
+| :------------- | :-------------------- | :------------------ |
+| `GUESTBOOK_DB` | `./data/guestbook.db` | SQLite file path    |
+| `HOST`         | `0.0.0.0` (Docker)    | Server bind address |
+| `PORT`         | `4321`                | Server port         |
 
 `data/` is gitignored and mounted as a volume in production.
 

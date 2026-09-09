@@ -5,14 +5,14 @@ export type Blog = CollectionEntry<'blogs'>
 export type Project = CollectionEntry<'projects'>
 
 export type TocNode = MarkdownHeading & {
-	children: TocNode[]
+  children: TocNode[]
 }
 
 export type TaggedEntry = {
-	type: 'projects' | 'blogs'
-	slug: string
-	title: string
-	description: string
-	tags: string[]
-	date: Date
+  type: 'projects' | 'blogs'
+  slug: string
+  title: string
+  description: string
+  tags: string[]
+  date: Date
 }
