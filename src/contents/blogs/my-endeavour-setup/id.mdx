@@ -1,0 +1,105 @@
+---
+title: 'Bagaimana Saya Menyiapkan EndeavourOS dengan Noctalia'
+description: 'Catatan perjalanan saya dalam menyiapkan EndeavourOS dengan Noctalia, termasuk konfigurasi dan berbagai penyesuaian yang saya lakukan untuk membangun desktop Linux yang sesuai dengan kebutuhan saya.'
+date: '2026-09-01'
+tags: [endeavouros, linux, noctalia, umbriel, customization, desktop]
+---
+
+import { BlogImage } from '@components/molecules'
+import desktop from '@assets/blogs/my-endeavour-setup/desktop.png'
+
+# Pendahuluan
+
+Belakangan ini saya ingin punya setup Linux yang ringan, mudah dikustomisasi, tapi tetap memberi saya kebebasan untuk mengatur sistem sesuai kebutuhan. Setelah mencoba beberapa pendekatan, akhirnya saya memilih EndeavourOS dengan Umbriel sebagai window manager dan Noctalia sebagai desktop shell.
+
+Sebenarnya, sistem yang saya inginkan cukup sederhana. Setelah sistem selesai dipasang, saya ingin bisa langsung menggunakannya tanpa harus menghabiskan waktu berjam-jam untuk mengatur semuanya dari awal.
+
+Karena itu, saya juga membuat dotfiles sendiri yang berisi konfigurasi dan packages yang biasa saya gunakan sehari-hari. Dengan begitu, setup yang biasanya membutuhkan cukup banyak langkah bisa saya lakukan hampir dalam sekali jalan.
+
+Di tulisan ini saya akan membahas alasan saya memilih masing-masing komponen, sekaligus bagaimana saya menyiapkan semuanya dari instalasi EndeavourOS sampai desktop siap digunakan.
+
+# Kenapa EndeavourOS?
+
+Saya memilih EndeavourOS karena saya memang menyukai ekosistem Arch Linux. Saya suka model rolling release dan software yang relatif baru. Saya juga menggunakan NVIDIA, jadi saya ingin memiliki kontrol penuh terhadap sistem dan driver yang digunakan.
+
+Namun, saya tidak ingin setiap kali install ulang harus menyiapkan Arch dari awal melalui command line. Buat saya, proses seperti itu cukup merepotkan kalau harus dilakukan berulang kali. Karena itu, EndeavourOS menjadi pilihan yang pas karena proses instalasinya jauh lebih sederhana.
+
+Salah satu hal yang paling membantu adalah installer-nya dapat menangani instalasi driver secara otomatis, termasuk driver NVIDIA yang saya butuhkan. Jadi, saya tetap mendapatkan fleksibilitas dan pengalaman menggunakan ekosistem Arch tanpa harus menghabiskan banyak waktu hanya untuk menyiapkan sistem dari awal.
+
+# Kenapa Umbriel?
+
+Awalnya saya sebenarnya ingin menggunakan Niri. Saya cukup tertarik dengan konsep scrolling window manager yang ditawarkan Niri, tetapi kemudian saya menemukan Umbriel dan mulai mempertimbangkannya.
+
+Salah satu fitur yang langsung menarik perhatian saya adalah scratchpad. Fitur ini sangat berguna untuk aplikasi yang sering saya buka, tetapi tidak selalu ingin saya tempatkan di workspace utama. Dikombinasikan dengan model scrolling window management, workflow Umbriel terasa lebih cocok dengan cara saya menggunakan desktop sehari-hari.
+
+Selain itu, Umbriel juga dibuat oleh pengembang Noctalia, sehingga saya mendapatkan kombinasi window manager dan desktop shell yang memang dirancang untuk bekerja bersama. Pada akhirnya, scratchpad menjadi salah satu alasan utama saya memilih Umbriel dibandingkan kembali ke pilihan awal saya, yaitu Niri.
+
+# Kenapa Noctalia?
+
+Untuk desktop shell, saya menggunakan Noctalia. Saya tertarik dengan Noctalia karena pendekatannya tidak bergantung pada Quickshell, tetapi tetap memberikan pengalaman desktop yang cukup lengkap. Panel, launcher, notification, wallpaper, system controls, dan berbagai komponen desktop lainnya tersedia dalam satu shell yang terintegrasi.
+
+Dengan begitu, desktop saya terasa lebih seperti sebuah desktop environment, tetapi saya tetap mendapatkan kontrol yang saya inginkan dari setup berbasis window manager. Pembagian stack-nya juga cukup jelas. Umbriel mengatur window, sementara Noctalia mengatur desktop. Keduanya saling melengkapi tanpa membuat setup saya terasa terlalu kompleks.
+
+# Kenapa Noctalia Greeter?
+
+Untuk login screen, saya menggunakan Noctalia Greeter. Alasan utamanya adalah karena saya ingin tema login screen tetap sinkron dengan Noctalia. Karena tampilan desktop saya sudah dikontrol oleh Noctalia, saya ingin login screen juga mengikuti tema yang sama. Dengan begitu, saya tidak perlu mengatur tema secara terpisah hanya untuk mendapatkan tampilan yang konsisten.
+
+Selain itu, menggunakan komponen yang masih berada dalam ekosistem Noctalia membuat keseluruhan stack terasa lebih menyatu. Jadi, dari login screen sampai ke desktop, semuanya tetap menggunakan pendekatan dan tampilan yang kurang lebih sama.
+
+# Mulai Instalasi
+
+Setelah EndeavourOS selesai terpasang, saya sebenarnya tidak ingin menghabiskan waktu untuk melakukan konfigurasi satu per satu. Daripada mengingat kembali package apa saja yang harus dipasang, konfigurasi mana yang perlu disalin, dan setting apa yang harus diubah, saya cukup menjalankan installer dotfiles yang sudah saya buat:
+
+```bash
+curl -fsSL https://dotfiles.r3p.dev/install.sh | bash
+```
+
+Dari sini, sebagian besar pekerjaan langsung ditangani oleh installer. Mulai dari package yang saya butuhkan sampai konfigurasi desktop yang saya gunakan, semuanya sudah didefinisikan di dalam dotfiles.
+
+Jadi setelah instalasi EndeavourOS selesai, saya tinggal menjalankan satu perintah dan membiarkannya bekerja. Konfigurasi lengkapnya juga saya simpan di repository [dotfiles](https://github.com/r3p-dev/dotfiles), jadi seluruh setup ini tidak hanya ada di satu mesin.
+
+# Sekali Pasang, Langsung Siap
+
+Ini adalah bagian yang paling saya sukai dari setup ini.
+
+Prosesnya cukup sederhana:
+
+```text
+Install EndeavourOS
+	↓
+Jalankan installer
+	↓
+Packages + configuration
+	↓
+Siap Digunakan
+```
+
+Saya tidak perlu mengingat package apa yang harus dipasang atau konfigurasi apa yang harus disalin. Semuanya sudah didefinisikan di dotfiles.
+
+Buat saya, ini terasa jauh lebih nyaman, terutama ketika harus melakukan reinstall atau menyiapkan mesin baru. Saya cukup mengulangi proses yang sama dan environment yang saya dapatkan kurang lebih sudah seperti yang biasa saya gunakan sehari-hari.
+
+# Setup Saya Saat Ini
+
+Pada akhirnya, setup saya terdiri dari beberapa komponen yang masing-masing punya tugas sendiri.
+
+<BlogImage src={desktop} alt="EndeavourOS" />
+
+**EndeavourOS** menjadi fondasi utamanya. Saya mendapatkan base Arch yang fleksibel, tetapi proses instalasinya tetap cukup praktis. Dukungan untuk driver NVIDIA juga menjadi salah satu alasan kenapa saya memilihnya.
+
+Kemudian ada **Umbriel**, scrolling window manager yang saya gunakan sehari-hari. Fitur scratchpad-nya juga cukup sesuai dengan cara saya bekerja, jadi saya tidak perlu terlalu banyak mengubah workflow hanya untuk menyesuaikan diri dengan window manager.
+
+Untuk bagian desktop shell, saya menggunakan **Noctalia**. Ini memberikan pengalaman desktop yang lebih lengkap tanpa harus bergantung pada Quickshell.
+
+Kemudian ada **Noctalia Greeter** yang menangani login screen. Salah satu hal yang saya suka adalah tema login bisa dibuat selaras dengan Noctalia, sehingga pengalaman visualnya terasa lebih konsisten dari awal masuk ke sistem sampai masuk ke desktop.
+
+Bagian terakhirnya adalah dotfiles, tempat saya menyimpan semua konfigurasi ini.
+
+Dengan dotfiles, setup ini tidak lagi sekadar kumpulan konfigurasi yang hanya ada di satu komputer. Saya bisa menyimpannya, memperbaikinya, dan menggunakannya kembali kapan pun diperlukan.
+
+# Penutup
+
+Pada akhirnya, saya tidak terlalu mengejar setup yang kelihatan paling keren atau paling kompleks. Saya cuma ingin komputer yang ketika dinyalakan terasa seperti komputer saya sendiri.
+
+Saya sudah terbiasa dengan cara kerja window manager, shortcut yang saya gunakan, tampilan desktop, sampai hal-hal kecil seperti scratchpad. Jadi ketika harus reinstall, saya tidak ingin semuanya hilang dan harus menghabiskan waktu berjam-jam untuk mengembalikannya.
+
+Mungkin itu yang paling saya suka dari setup ini. Setelah install EndeavourOS, saya tinggal menjalankan installer dotfiles, menunggu semuanya selesai, dan setelah itu komputer sudah siap dipakai. Sederhana saja. Saya tidak ingin terlalu lama sibuk mengatur komputer, saya cuma ingin selesai setup dan langsung bisa kerja.

@@ -1,0 +1,329 @@
+---
+title: 'Cara Menyiapkan VPS untuk Pemula, dari Seorang Pemula (Bagian 3: Podman Rootless dan Kontainer Pertama)'
+description: Bagian 3 dari penyiapan VPS pertama saya di Debian 13 Minimal. Membuat Podman rootless bekerja dengan benar - paket yang ditinggalkan Debian Minimal, pemetaan UID, lingering, port istimewa, dan menjalankan kontainer pertama sebagai layanan systemd lewat Quadlet.
+date: '2026-05-22'
+tags: [vps, debian, podman, quadlet, systemd, containers]
+---
+
+> **Seri 5 bagian.**
+>
+> · [Bagian 1 — Mengamankan Sistem Dasar](/blogs/vps-setup-part-1)
+>
+> · [Bagian 2 — Firewall & Ban](/blogs/vps-setup-part-2)
+>
+> · **Bagian 3 — Podman Rootless**
+>
+> · [Bagian 4 — Caddy & HTTPS](/blogs/vps-setup-part-4)
+>
+> · [Bagian 5 — Men-deploy Aplikasi](/blogs/vps-setup-part-5)
+
+# Melanjutkan dari Mana
+
+[Bagian 1](/blogs/vps-setup-part-1) mengamankan jalan masuk. [Bagian 2](/blogs/vps-setup-part-2) menutup semua port yang tidak perlu terbuka dan membuat mesinnya menambal dirinya sendiri.
+
+Server sekarang aman dan sama sekali tidak berguna. Belum ada apa pun yang berjalan di atasnya. Bagian ini membereskan itu.
+
+# Kenapa Harus Kontainer
+
+Untuk satu aplikasi kecil, kontainer belum jelas manfaatnya. Kita bisa pasang Node, clone repo, jalankan pakai layanan systemd, selesai.
+
+Yang mengubah pikiran saya adalah aplikasi kedua. Dua aplikasi Node di satu mesin berarti dua versi Node yang cepat atau lambat berselisih, dua set dependensi sistem, dan `/etc` yang pelan-pelan penuh definisi layanan yang saya tidak ingat pernah menulisnya. Isolasinya sebenarnya bukan soal keamanan. Ini soal tidak perlu menampung seluruh mesin di kepala. Tiap aplikasi bawa dependensinya sendiri, dan menghapus satu berarti menghapus semuanya.
+
+Setengahnya lagi soal reproduktibilitas. Kontainer yang jalan di laptop saya jalan sama persis di VPS, karena image-nya sama. Itu saja sudah menghapus satu genre bug deployment.
+
+## Kenapa Podman, Bukan Docker
+
+Docker itu default industri, dan ekosistem, perkakas, serta komunitasnya jauh lebih matang. Saya tidak memilih Podman untuk terlihat beda.
+
+**Tanpa daemon.** Docker menjalankan layanan latar sebagai root yang memiliki semua kontainer, jadi kalau ia mati, semuanya ikut mati. Podman menjalankan kontainer sebagai proses anak langsung dari siapa pun yang memulainya.
+
+**Rootless itu mode normal, bukan mode khusus.** Kontainer Podman berjalan sebagai pengguna tanpa hak istimewa secara bawaan, pakai user namespace Linux. Root di dalam kontainer dipetakan ke pengguna `admin` biasa di luarnya, jadi kalau ada container escape, penyerangnya mendarat di akun tanpa hak istimewa, bukan di root.
+
+**Integrasinya dengan systemd benar.** Ini yang paling penting buat saya. Debian sudah menjalankan systemd, yang sudah mengurus start saat boot, restart saat gagal, urutan dependensi, dan pengumpulan log. Quadlet membuat saya bisa mendeskripsikan kontainer sebagai unit systemd dan dapat semua itu, alih-alih menjalankan supervisor kedua di dalam yang pertama.
+
+**Perintahnya sama.** `podman run`, `podman build`, `podman ps`. Pengganti langsung untuk pemakaian sehari-hari, dan ia memakai image OCI standar dari Docker Hub.
+
+Kalau mau argumen yang lebih panjang, termasuk di mana Docker masih lebih baik, saya menulisnya terpisah di [Kenapa Saya Memilih Podman Ketimbang Docker](/blogs/why-podman-over-docker).
+
+# Paket Pendukung
+
+Rootless tidak otomatis jalan cuma karena paketnya terpasang. Beberapa potong harus ada, dan tiap potong gagal dengan cara membingungkan yang berbeda kalau hilang. Debian Minimal tidak membawa satu pun:
+
+```bash
+sudo apt install -y podman uidmap passt aardvark-dns netavark dbus-user-session
+```
+
+- **`uidmap`** menyediakan `newuidmap` dan `newgidmap`, helper setuid yang melakukan pemetaan user namespace. Tanpanya, kontainer rootless langsung gagal dan galatnya tidak jelas menyebut sebabnya.
+- **`passt`** menyediakan `pasta`, jaringan userspace yang dipakai Podman 5 untuk kontainer rootless.
+- **`netavark`** backend jaringannya dan **`aardvark-dns`** server DNS-nya. Yang kedua itu yang bikin kontainer bisa saling menemukan lewat nama, dan itu persis cara Caddy menjangkau aplikasi di [Bagian 4](/blogs/vps-setup-part-4). Kalau dilewatkan, kita dapat galat "no such host" yang membingungkan antara dua kontainer yang jelas-jelas sama-sama jalan.
+- **`dbus-user-session`** memberi pengguna sesi D-Bus yang benar, yang dibutuhkan instance systemd per-pengguna supaya berfungsi sama sekali.
+
+# Memeriksa Pemetaan UID
+
+Kontainer rootless bekerja dengan memetakan rentang UID subordinat ke pengguna kita. Waktu sebuah proses mengaku UID 0 di dalam kontainer, kernel menerjemahkannya jadi UID tinggi tanpa hak istimewa di host. Terjemahan itu seluruh model keamanannya, dan rentangnya harus dialokasikan lebih dulu.
+
+`adduser` Debian biasanya mengurus ini, tapi pastikan, jangan asumsi:
+
+```bash
+grep admin /etc/subuid /etc/subgid
+```
+
+```output
+/etc/subuid:admin:100000:65536
+/etc/subgid:admin:100000:65536
+```
+
+Satu baris dari tiap berkas: UID awal dan berapa banyak yang dicadangkan. Tanpa output sama sekali berarti belum ada rentang yang dialokasikan, dan semua kontainer rootless akan gagal. Kalau salah satunya hilang:
+
+```bash
+sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 admin
+podman system migrate
+```
+
+`podman system migrate` itu penting. Ia membuat kontainer yang sudah ada mengambil pemetaan baru, bukan diam-diam bertahan di yang lama.
+
+Sekarang pastikan seluruh rantainya jalan:
+
+```bash
+podman run --rm docker.io/library/alpine echo "rootless works"
+```
+
+```output
+Trying to pull docker.io/library/alpine:latest...
+Getting image source signatures
+Copying blob 9824c27679d3 done
+Copying config 91ef0af61f done
+Writing manifest to image destination
+rootless works
+```
+
+Baris terakhir itu seluruh pengujiannya. Kalau pemetaannya hilang, yang muncul ini, dan tidak menyebut apa pun yang berguna soal penyebabnya:
+
+```output
+Error: cannot set up namespace using "/usr/bin/newuidmap": exit status 1
+```
+
+Perhatikan nama image-nya lengkap. Podman tidak diam-diam mengasumsikan Docker Hub seperti Docker. Ia akan minta kita memilih registry atau gagal langsung. Menulis `docker.io/library/...` penuh menghapus ambiguitasnya, dan sekarang saya melakukannya di mana-mana, termasuk di berkas unit.
+
+Pemetaannya bisa dilihat langsung, dan itu bikin konsepnya konkret:
+
+```bash
+podman unshare cat /proc/self/uid_map
+```
+
+```output
+         0       1000          1
+         1     100000      65536
+```
+
+Tiga kolom: UID di dalam namespace, jadi apa di host, dan berapa banyak yang dipetakan begitu. UID 0, root di dalam kontainer, adalah `admin` (1000) milik host, dan semua di atasnya mendarat di rentang yang dicadangkan.
+
+# Pengaturan yang Menentukan Segalanya
+
+Ini perilaku yang paling mengejutkan saya, dan alasan paling umum kenapa setup Podman rootless kelihatan rusak.
+
+Secara bawaan, layanan systemd milik pengguna dimulai waktu pengguna itu login dan berhenti waktu ia logout. Kontainer yang dikelola sesi kita akan mati begitu SSH ditutup. Server reboot jam 4 pagi, tidak ada yang login, tidak ada yang kembali hidup.
+
+`linger` mengubah itu:
+
+```bash
+sudo loginctl enable-linger admin
+```
+
+Dengan lingering aktif, pengguna ini dapat instance systemd persisten yang start saat boot dan terus jalan entah ada yang login atau tidak.
+
+```bash
+loginctl show-user admin --property=Linger
+```
+
+```output
+Linger=yes
+```
+
+Satu baris ini bedanya antara kontainer yang terus mati saat kita disconnect dan server yang benar-benar tetap hidup tanpa diawasi.
+
+Satu kebiasaan terkait: selalu jalankan perintah `systemctl --user` dari sesi SSH sungguhan sebagai pengguna itu. Pakai `sudo -u admin systemctl --user ...` akan gagal dengan galat bus connection yang kriptik, karena shell itu tidak punya `XDG_RUNTIME_DIR` yang menunjuk ke sesi penggunanya.
+
+# Mengizinkan Port 80 dan 443
+
+Port di bawah 1024 itu istimewa. Kontainer rootless, menurut definisinya, tidak istimewa. Itu masalah kalau rencananya melibatkan web server di 80 dan 443.
+
+Ada beberapa cara mengakalinya: redirect pakai `iptables`, memberi `CAP_NET_BIND_SERVICE`, atau menjalankan proxy-nya rootful. Saya pilih menurunkan ambangnya, yang paling gampang dinalar nanti:
+
+```bash
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/99-unprivileged-ports.conf
+sudo sysctl --system
+```
+
+Perlu jelas soal efeknya. Ini membiarkan proses tanpa hak istimewa mana pun di mesin ini mengikat port 80 ke atas. Di sistem multi-pengguna bersama itu penurunan keamanan yang nyata, karena pengguna berhak rendah bisa menyerobot port yang dimaksudkan untuk layanan sistem.
+
+Di VPS satu admin di mana satu-satunya pengguna non-root adalah saya, risiko itu tidak nyata. Tapi trade-off-nya tetap layak disebut daripada disalin membabi buta, karena ini persis jenis pengaturan yang aman di sini dan salah di tempat lain.
+
+```bash
+sysctl net.ipv4.ip_unprivileged_port_start
+```
+
+```output
+net.ipv4.ip_unprivileged_port_start = 80
+```
+
+Default-nya `1024`. Melihat `80` di sini yang bikin Caddy bisa mengikat port web di [Bagian 4](/blogs/vps-setup-part-4) tanpa hak istimewa sama sekali.
+
+# Di Mana Aplikasi Akan Tinggal
+
+Keputusan kecil yang saya syukuri diambil sebelum ada yang perlu dipindah. Semua yang dijalankan server tinggal di bawah satu direktori di home pengguna:
+
+```bash
+mkdir -p ~/apps
+```
+
+Bukan `/var/www`, bukan `/opt`, bukan tersebar di seluruh filesystem. Satu direktori, dimiliki pengguna biasa, menampung semua aplikasi dan konfigurasinya.
+
+Alasannya bukan kerapian. Alasannya backup jadi satu pertanyaan, "sudah saya salin `~/apps`?", bukan perburuan lewat path sistem sambil mengingat konfigurasi mana ada di mana. Digabung dengan kontainer rootless, seluruh deployment jadi satu direktori home.
+
+# Quadlet: Kontainer sebagai Layanan systemd
+
+Naluri pertama saya `compose.yml`, karena itu yang sudah saya tahu. Jalan. Tapi ada satu pertanyaan yang tidak bisa saya lewati: apa yang menjalankan kontainer ini setelah reboot?
+
+Jawaban yang biasa adalah kebijakan restart plus daemon, entri cron `@reboot`, atau `podman generate systemd` yang menghasilkan berkas unit yang lalu kita pelihara terpisah dari berkas Compose. Semuanya membautkan mekanisme kedua ke yang pertama.
+
+Quadlet menghapus mekanisme kedua itu. Kita menulis berkas yang bentuknya seperti unit systemd, menaruhnya di `~/.config/containers/systemd/`, dan sebuah generator mengubahnya jadi layanan sungguhan saat boot. Kontainernya jadi layanan systemd, lengkap dengan urutan boot, kebijakan restart, penanganan dependensi, dan log di `journalctl` bareng yang lain.
+
+Pastikan generator-nya ada. Ia disertakan sejak Podman 4.4:
+
+```bash
+ls /usr/lib/systemd/user-generators/podman-user-generator
+podman --version
+```
+
+```output
+/usr/lib/systemd/user-generators/podman-user-generator
+podman version 5.4.2
+```
+
+Path yang digemakan kembali berarti generator-nya terpasang. `No such file or directory` berarti Quadlet tidak tersedia dan tidak ada di bawah ini yang akan jalan.
+
+```bash
+mkdir -p ~/.config/containers/systemd
+```
+
+Saya menulis referensi lengkap format berkas unit-nya, semua seksi, semua tipe berkas, dan galat yang layak dikenali, di [Podman Quadlet: Menjalankan Kontainer sebagai Layanan systemd](/blogs/podman-quadlet-systemd). Di sini kita cuma membuktikan bahwa ini jalan.
+
+# Kontainer Pertama
+
+Sesuatu yang bisa dibuang, buat belajar alurnya sebelum [Bagian 4](/blogs/vps-setup-part-4) bergantung padanya:
+
+```bash
+nano ~/.config/containers/systemd/hello.container
+```
+
+```ini
+[Unit]
+Description=Quadlet test container
+
+[Container]
+ContainerName=hello
+Image=docker.io/library/caddy:2-alpine
+PublishPort=8080:80
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
+```
+
+Empat seksi, dan pembagiannya yang perlu diresapi:
+
+- **`[Unit]`** dan **`[Install]`** seksi systemd biasa dan artinya persis seperti biasanya.
+- **`[Container]`** seksi milik Quadlet sendiri, di mana tiap kunci jadi argumen `podman run`.
+- **`[Service]`** tempat direktif layanan systemd. `Restart=always` ada di sini, bukan di `[Container]`. Menaruhnya di seksi yang salah itu kesalahan awal yang umum.
+
+`[Install] WantedBy=default.target` yang bikin ia jalan saat boot. Kita tidak bisa `systemctl --user enable` layanan Quadlet, karena unit-nya dihasilkan, bukan dipasang di disk. Seksi ini plus reload itu mekanismenya.
+
+Sekarang alurnya:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user start hello
+```
+
+`daemon-reload` itu yang memicu generator membaca berkas `.container` dan menghasilkan layanan. Tiap kali menambah atau menyunting berkas unit, reload sebelum start. Menyunting berkas lalu bingung kenapa tidak ada yang berubah itu kesalahan Quadlet paling umum, dan itu menghabiskan dua puluh menit yang sama buat semua orang.
+
+```bash
+systemctl --user status hello
+```
+
+```output
+● hello.service - Quadlet test container
+     Loaded: loaded (/home/admin/.config/containers/systemd/hello.container; generated)
+     Active: active (running) since Fri 2026-05-22 11:04:18 WIB; 5s ago
+   Main PID: 2841 (conmon)
+```
+
+Perhatikan `generated` di baris `Loaded`, bukan path di bawah `/etc`. Itu tanda generator Quadlet sudah bekerja. Kalau layanannya tidak ketemu sama sekali, `daemon-reload`-nya tidak terjadi.
+
+```bash
+podman ps
+```
+
+```output
+CONTAINER ID  IMAGE                             STATUS        PORTS                 NAMES
+7d1e4b9a03c2  docker.io/library/caddy:2-alpine  Up 5 seconds  0.0.0.0:8080->80/tcp  hello
+```
+
+```bash
+curl -I http://localhost:8080
+```
+
+```output
+HTTP/1.1 200 OK
+content-type: text/html; charset=utf-8
+server: Caddy
+```
+
+`200 OK` berarti kontainer rootless, jaringan, publikasi port, dan integrasi systemd semuanya jalan. Log-nya masuk ke tempat log layanan lain masuk:
+
+```bash
+journalctl --user -u hello -f
+```
+
+```output
+May 22 11:04:18 my-vps hello[2841]: {"level":"info","msg":"using config from file",
+                                     "file":"/etc/caddy/Caddyfile"}
+May 22 11:04:18 my-vps hello[2841]: {"level":"info","msg":"serving initial configuration"}
+```
+
+Sekarang pengujian sebenarnya. Apakah ia bertahan melewati reboot tanpa ada yang login?
+
+```bash
+sudo reboot
+```
+
+```bash
+systemctl --user is-active hello
+```
+
+```output
+active
+```
+
+Kalau ia kembali sendiri, lingering-nya jalan dan fondasinya sehat. Kalau tidak, `loginctl show-user admin --property=Linger` yang pertama dicek.
+
+Lalu bersihkan:
+
+```bash
+systemctl --user stop hello
+rm ~/.config/containers/systemd/hello.container
+systemctl --user daemon-reload
+```
+
+# Posisi Server Sekarang
+
+Podman rootless jalan, kontainer bertahan melewati logout maupun reboot, port 80 dan 443 tersedia untuk pengguna tanpa hak istimewa, dan ada tata letak direktori yang bisa ditangkap satu backup.
+
+Situsnya masih belum ada. Tapi semua yang dibutuhkan sebuah situs untuk jalan sudah di tempatnya, dan uji reboot membuktikan itu bertahan tanpa diawasi.
+
+# Bagian Selanjutnya
+
+Di [Bagian 4](/blogs/vps-setup-part-4), Caddy dipasang di depan sebagai reverse proxy: jaringan kontainer privat, penyimpanan sertifikat persisten, dan HTTPS otomatis di domain sungguhan tanpa `certbot` di mana pun.

@@ -1,0 +1,104 @@
+---
+title: 'How I Set Up EndeavourOS with Noctalia'
+description: 'A personal account of how I set up EndeavourOS with Noctalia, including the configurations and customizations I made to build a Linux desktop that fits my needs.'
+date: '2026-09-01'
+tags: [endeavouros, linux, noctalia, umbriel, customization, desktop]
+---
+
+import { BlogImage } from '@components/molecules'
+import desktop from '@assets/blogs/my-endeavour-setup/desktop.png'
+
+# Introduction
+
+Lately, I have wanted a Linux setup that is lightweight, easy to customize, while still giving me the freedom to configure the system according to my needs. After trying several approaches, I eventually settled on EndeavourOS with Umbriel as my window manager and Noctalia as my desktop shell.
+
+The system I wanted was actually quite simple. Once the system was installed, I wanted to be able to start using it right away without spending hours configuring everything from scratch.
+
+Because of that, I also created my own dotfiles containing the configurations and packages I commonly use on a daily basis. This allows me to complete a setup that would normally require quite a few steps almost in a single run.
+
+In this post, I will go through why I chose each component, as well as how I set everything up, from installing EndeavourOS to having a fully usable desktop.
+
+# Why EndeavourOS?
+
+I chose EndeavourOS because I genuinely enjoy the Arch Linux ecosystem. I like the rolling-release model and having relatively up-to-date software. I also use NVIDIA, so I wanted to have full control over my system and the drivers I use.
+
+However, I did not want to go through the process of setting up Arch from scratch through the command line every time I reinstalled it. For me, that process becomes quite tedious when I have to repeat it over and over again. That is why EndeavourOS felt like a good fit, since its installation process is much simpler.
+
+One of the things I find particularly helpful is that its installer can handle driver installation automatically, including the NVIDIA drivers I need. This means I still get the flexibility and experience of using the Arch ecosystem without having to spend a lot of time just getting the system up and running.
+
+# Why Umbriel?
+
+Initially, I actually wanted to use Niri. I was quite interested in the scrolling window manager concept offered by Niri, but then I discovered Umbriel and started considering it instead.
+
+One feature that immediately caught my attention was the scratchpad. It is very useful for applications that I frequently open but do not always want to keep on my main workspace. Combined with the scrolling window management model, Umbriel's workflow feels more suited to the way I use my desktop every day.
+
+On top of that, Umbriel is also made by the developer behind Noctalia, so I get a combination of a window manager and desktop shell that are designed to work together. In the end, the scratchpad became one of the main reasons I chose Umbriel instead of going back to my original choice, Niri.
+
+# Why Noctalia?
+
+For my desktop shell, I use Noctalia. I was interested in Noctalia because its approach does not rely on Quickshell while still providing a fairly complete desktop experience. The panel, launcher, notifications, wallpaper, system controls, and various other desktop components are available within a single integrated shell.
+
+This makes my desktop feel more like a traditional desktop environment, while still giving me the level of control I want from a window-manager-based setup. The division between the different components is also quite clear. Umbriel manages the windows, while Noctalia manages the desktop. They complement each other without making my setup feel overly complicated.
+
+# Why Noctalia Greeter?
+
+For the login screen, I use Noctalia Greeter. The main reason is that I want the login screen theme to stay in sync with Noctalia. Since my desktop appearance is already managed by Noctalia, I also want the login screen to follow the same theme. This means I do not have to configure a separate theme just to maintain a consistent look.
+
+In addition, using a component that is still part of the Noctalia ecosystem makes the overall stack feel more cohesive. From the login screen to the desktop, everything follows roughly the same approach and visual style.
+
+# Starting the Installation
+
+Once EndeavourOS is installed, I do not really want to spend time configuring everything one step at a time. Instead of having to remember which packages need to be installed, which configurations need to be copied, and which settings need to be changed, I can simply run the dotfiles installer I created:
+
+```bash
+curl -fsSL https://dotfiles.r3p.dev/install.sh | bash
+```
+
+From there, most of the work is handled by the installer. Everything from the packages I need to the desktop configuration I use is already defined in my dotfiles.
+
+So after installing EndeavourOS, I just run a single command and let it do its job. I also keep the complete configuration in my [dotfiles](https://github.com/r3p-dev/dotfiles)
+repository, so the entire setup is not tied to just one machine.
+
+# Install Once, Ready to Use
+
+This is probably the part I like the most about this setup.
+
+The process is quite simple:
+
+Install EndeavourOS
+↓
+Run the installer
+↓
+Packages + configuration
+↓
+Ready to use
+
+I do not have to remember which packages need to be installed or which configurations need to be copied. Everything is already defined in my dotfiles.
+
+For me, this is much more convenient, especially when I need to reinstall the system or set up a new machine. I can simply repeat the same process and end up with an environment that is more or less the same as the one I normally use every day.
+
+# My Current Setup
+
+In the end, my setup consists of several components, each with its own purpose.
+
+<BlogImage src={desktop} alt="EndeavourOS" />
+
+**EndeavourOS** serves as the foundation. I get a flexible Arch-based system while keeping the installation process relatively practical. NVIDIA driver support is also one of the reasons I chose it.
+
+Then there is **Umbriel**, the scrolling window manager I use every day. Its scratchpad feature also fits quite well with the way I work, so I do not have to change my workflow too much just to adapt to the window manager.
+
+For the desktop shell, I use **Noctalia**. It provides a more complete desktop experience without relying on Quickshell.
+
+Then there is **Noctalia Greeter**, which handles the login screen. One thing I like is that the login theme can be made consistent with Noctalia, making the visual experience feel more cohesive from the moment I log into the system until I reach the desktop.
+
+The final piece is my dotfiles, where I keep all of these configurations.
+
+With dotfiles, this setup is no longer just a collection of configurations that exists on a single computer. I can store it, improve it, and reuse it whenever I need to.
+
+# Conclusion
+
+In the end, I am not really trying to build the coolest-looking or most complicated setup. I just want a computer that feels like my own computer when I turn it on.
+
+I have gotten used to the way my window manager works, the shortcuts I use, the desktop appearance, and even small things like the scratchpad. So when I need to reinstall the system, I do not want all of that to disappear and then spend hours putting everything back together.
+
+That is probably what I like most about this setup. After installing EndeavourOS, I just run the dotfiles installer, wait for everything to finish, and the computer is ready to use. Nothing complicated. I do not want to spend too much time configuring my computer. I just want to finish the setup and get straight to work.

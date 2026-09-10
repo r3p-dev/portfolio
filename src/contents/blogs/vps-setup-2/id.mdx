@@ -1,0 +1,494 @@
+---
+title: 'Cara Menyiapkan VPS untuk Pemula, dari Seorang Pemula (Bagian 2: Firewall, Ban, dan Pembaruan Otomatis)'
+description: Bagian 2 dari penyiapan VPS pertama saya di Debian 13 Minimal. Jebakan port SSH di Debian 13, swap, menutup semua port dengan ufw, mem-ban pelanggar berulang dengan fail2ban, membatasi jurnal, dan membiarkan patch keamanan memasang dirinya sendiri.
+date: '2026-05-21'
+tags: [vps, debian, server, security, firewall, linux]
+---
+
+> **Seri 5 bagian.**
+>
+> · [Bagian 1 — Mengamankan Sistem Dasar](/blogs/vps-setup-part-1)
+>
+> · **Bagian 2 — Firewall & Ban**
+>
+> · [Bagian 3 — Podman Rootless](/blogs/vps-setup-part-3)
+>
+> · [Bagian 4 — Caddy & HTTPS](/blogs/vps-setup-part-4)
+>
+> · [Bagian 5 — Men-deploy Aplikasi](/blogs/vps-setup-part-5)
+
+# Melanjutkan dari Mana
+
+[Bagian 1](/blogs/vps-setup-part-1) mengambil instalasi Debian 13 Minimal yang masih baru dan memberinya batas: sistem diperbarui, kunci SSH menggantikan kata sandi, pengguna biasa menggantikan root, dan `sshd_config` yang sudah dikeraskan.
+
+Semua itu soal lapisan login. Semua port lain di mesin ini masih terbuka, tidak ada yang mengawasi percobaan gagal berulang, dan pembaruan keamanan cuma terjadi kalau saya ingat menjalankannya.
+
+Bagian ini bagian tengah yang membosankan. Tidak ada aplikasi yang muncul di ujungnya. Tapi inilah yang menentukan apakah server tetap stabil begitu ada sesuatu yang nyata berjalan di atasnya.
+
+# Detail Debian 13 yang Menjebak Saya
+
+Pertama, hal yang bikin saya bingung dua puluh menit di akhir Bagian 1.
+
+Saya mengubah `Port 22022` di `/etc/ssh/sshd_config`, merestart SSH, dan servernya tetap menjawab di port 22 sambil mengabaikan 22022 sepenuhnya.
+
+Debian 13 memakai socket activation untuk SSH secara bawaan. systemd yang memegang socket pendengarnya, bukan `sshd`, jadi direktif `Port` tidak pernah dibaca dan merestart `ssh.service` tidak mengubah apa pun.
+
+Cek dulu posisi kita di mana:
+
+```bash
+systemctl is-enabled ssh.socket
+```
+
+```output
+enabled
+```
+
+`enabled` berarti socket activation yang pegang kendali. `disabled` atau `Failed to get unit file state` berarti bukan, dan masalahnya ada di tempat lain. Solusi paling sederhana adalah mengembalikan portnya ke `sshd`:
+
+```bash
+sudo systemctl disable --now ssh.socket
+sudo systemctl enable --now ssh.service
+```
+
+```output
+Removed "/etc/systemd/system/sockets.target.wants/ssh.socket".
+Created symlink '/etc/systemd/system/multi-user.target.wants/ssh.service' → '/usr/lib/systemd/system/ssh.service'.
+```
+
+Sekarang `sshd` mengikat portnya sendiri dan baris `Port 22022` dari Bagian 1 berlaku.
+
+Kalau lebih suka tetap pakai socket activation, beri tahu socket-nya:
+
+```bash
+sudo systemctl edit ssh.socket
+```
+
+```ini
+[Socket]
+ListenStream=
+ListenStream=22022
+```
+
+`ListenStream=` yang kosong membersihkan nilai warisan port 22. Tanpa itu kita mendengarkan di dua port sekaligus, yang membatalkan tujuannya.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ssh.socket
+```
+
+Apa pun caranya, pastikan dulu sebelum percaya:
+
+```bash
+sudo ss -tlnp | grep ssh
+```
+
+```output
+LISTEN 0  128  0.0.0.0:22022  0.0.0.0:*  users:(("sshd",pid=1284,fd=3))
+LISTEN 0  128     [::]:22022     [::]:*  users:(("sshd",pid=1284,fd=3))
+```
+
+Dua baris, keduanya di 22022, IPv4 dan IPv6. Yang tidak boleh muncul adalah baris berakhiran `:22`. Kalau masih ada, sesuatu masih memegang port lama dan kita sedang menuju terkunci di luar.
+
+Kebiasaan yang sama seperti sebelumnya: biarkan sesi SSH yang sedang jalan tetap terbuka sambil menguji yang baru dari terminal kedua. Sesi terbuka itu sudah beberapa kali menyelamatkan saya.
+
+```bash
+ssh -p 22022 admin@IP_VPS
+```
+
+```output
+Linux my-vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
+admin@my-vps:~$
+```
+
+# Penamaan dan Waktu
+
+Dua hal kecil yang tidak memakan biaya dan terbayar belakangan.
+
+Hostname muncul di prompt, di log, dan di setiap peringatan yang dikirim sistem. Server bernama `debian` tidak memberi tahu apa-apa enam bulan lagi:
+
+```bash
+sudo hostnamectl set-hostname my-vps
+```
+
+Zona waktu lebih penting dari kelihatannya. Setiap baris log, setiap ban, setiap tugas terjadwal dicap dengan zona waktu, dan mengonversinya di kepala terus-menerus itu pajak kecil yang kita bayar berulang:
+
+```bash
+sudo timedatectl set-timezone Asia/Jakarta
+```
+
+Lalu pastikan jamnya benar-benar sinkron:
+
+```bash
+timedatectl status
+```
+
+```output
+               Local time: Thu 2026-05-21 16:20:33 WIB
+           Universal time: Thu 2026-05-21 09:20:33 UTC
+                 Time zone: Asia/Jakarta (WIB, +0700)
+System clock synchronized: yes
+              NTP service: active
+```
+
+Yang dicari `System clock synchronized: yes`. Jam yang melenceng diam-diam merusak validasi sertifikat TLS, dan kegagalan itu menghabiskan satu sore karena kelihatannya seperti masalah lain.
+
+# Menambahkan Swap
+
+Kebanyakan paket VPS murah datang dengan RAM 1–2 GB dan tanpa swap. Untuk melayani trafik biasanya cukup. Untuk membangun sesuatu, tidak.
+
+Saya tahu ini waktu sebuah build Node terbunuh di tengah jalan tanpa galat yang berguna. OOM killer kernel yang menghentikannya, dan tidak ada apa pun di output build yang bilang begitu. Harus dicari sendiri:
+
+```bash
+sudo dmesg | grep -i "killed process"
+```
+
+```output
+[ 2451.882194] Out of memory: Killed process 8231 (node) total-vm:2185432kB,
+               anon-rss:743128kB, file-rss:0kB, shmem-rss:0kB, UID:1000
+```
+
+Hasil kosong di sini berarti build-nya gagal karena sebab lain.
+
+Swap tidak bikin server cepat. Ia membuat mesin bertahan melewati lonjakan memori singkat alih-alih membunuh penyebabnya, dan itu sudah cukup.
+
+Buat berkas swap 2 GB:
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+```
+
+```output
+Setting up swapspace version 1, size = 2 GiB (2147479552 bytes)
+no label, UUID=4f8c2a19-6b3d-4e7f-9a12-c5d8e0f34b76
+```
+
+Cuma `mkswap` yang mencetak sesuatu. `swapon` yang sukses dalam diam itu hasil yang baik. Kalau `chmod`-nya terlewat, ia akan mengeluh di sini:
+
+```output
+swapon: /swapfile: insecure permissions 0644, 0600 suggested.
+```
+
+`chmod 600` bukan opsional, karena berkas itu menampung memori yang dipindahkan ke sana, yang bisa berisi rahasia.
+
+Buat supaya bertahan setelah reboot:
+
+```bash
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+```output
+/swapfile none swap sw 0 0
+```
+
+`tee` yang menggemakan barisnya kembali itu tanda ia tertulis. Jalankan dua kali dan kita dapat entri ganda di `/etc/fstab`, jadi cek dulu sebelum mengulang.
+
+Lalu suruh kernel mengutamakan RAM dan cuma menyentuh swap saat benar-benar tertekan:
+
+```bash
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+sudo sysctl --system
+```
+
+```output
+vm.swappiness=10
+* Applying /etc/sysctl.d/99-swappiness.conf ...
+vm.swappiness = 10
+* Applying /etc/sysctl.conf ...
+```
+
+```bash
+free -h
+```
+
+```output
+               total        used        free      shared  buff/cache   available
+Mem:           957Mi       184Mi       412Mi       0.0Ki       498Mi       773Mi
+Swap:          2.0Gi          0B       2.0Gi
+```
+
+Baris `Swap` yang muncul itu hasilnya. `0B` terpakai itu benar dan wajar, karena swap itu asuransi, bukan sesuatu yang kita mau dipakai terus.
+
+# Firewall
+
+SSH sudah dikunci, tapi SSH tidak pernah jadi satu-satunya jalan masuk. Apa pun yang mengikat port di mesin ini bisa dijangkau dari seluruh internet kecuali ada yang bilang sebaliknya.
+
+Saya pilih model yang paling gampang dinalar: tolak semua yang masuk, lalu izinkan yang memang perlu ada. Dengan default itu, layanan yang tidak sengaja terbuka di suatu port cuma jadi tidak terjangkau, bukan diam-diam publik.
+
+`ufw` sudah dipasang di Bagian 1. Atur default-nya dulu:
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+```
+
+```output
+Default incoming policy changed to 'deny'
+(be sure to update your rules accordingly)
+Default outgoing policy changed to 'allow'
+(be sure to update your rules accordingly)
+```
+
+Sekarang bagian yang urutannya penting. Izinkan port SSH sebelum mengaktifkan firewall, atau `ufw` akan mengunci kita di luar server sendiri, seketika dan tanpa bertanya:
+
+```bash
+sudo ufw allow 22022/tcp comment 'SSH'
+```
+
+```output
+Rule added
+Rule added (v6)
+```
+
+Lalu port web yang dibutuhkan bagian berikutnya:
+
+```bash
+sudo ufw allow 80/tcp comment 'HTTP'
+sudo ufw allow 443/tcp comment 'HTTPS'
+sudo ufw allow 443/udp comment 'HTTP/3 QUIC'
+```
+
+Yang terakhir untuk HTTP/3. HTTPS jalan tanpa itu, tapi QUIC lewat UDP, jadi kalau dilewatkan HTTP/3 mati diam-diam sementara semuanya kelihatan normal.
+
+```bash
+sudo ufw enable
+```
+
+```output
+Command may disrupt existing ssh connections. Proceed with operation (y|n)? y
+Firewall is active and enabled on system startup
+```
+
+Peringatan itu bukan basa-basi. Ia menanyakan apakah kita yakin aturan tadi sudah ada.
+
+Baca ulang apa yang benar-benar terbuat, bukan apa yang kita maksudkan:
+
+```bash
+sudo ufw status numbered
+```
+
+```output
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22022/tcp                  ALLOW IN    Anywhere                   # SSH
+[ 2] 80/tcp                     ALLOW IN    Anywhere                   # HTTP
+[ 3] 443/tcp                    ALLOW IN    Anywhere                   # HTTPS
+[ 4] 443/udp                    ALLOW IN    Anywhere                   # HTTP/3 QUIC
+[ 5] 22022/tcp (v6)             ALLOW IN    Anywhere (v6)              # SSH
+[ 6] 80/tcp (v6)                ALLOW IN    Anywhere (v6)              # HTTP
+[ 7] 443/tcp (v6)               ALLOW IN    Anywhere (v6)              # HTTPS
+[ 8] 443/udp (v6)               ALLOW IN    Anywhere (v6)              # HTTP/3 QUIC
+```
+
+Delapan entri untuk empat aturan, karena masing-masing ditulis dua kali, sekali IPv4 dan sekali IPv6. Komentar `# SSH` itu alasan kenapa flag `comment` layak diketik. Setahun lagi daftar ini masih menjelaskan dirinya sendiri.
+
+Aturan bisa dihapus per nomor kalau ada yang salah:
+
+```bash
+sudo ufw delete 3
+```
+
+```output
+Deleting:
+ allow 443/tcp comment 'HTTPS'
+Proceed with operation (y|n)? y
+Rule deleted
+```
+
+Menghapus akan menomori ulang semua di bawahnya, jadi jalankan `status numbered` lagi di antara penghapusan daripada bekerja dari daftar yang basi.
+
+## Kenapa Firewall Ini Benar-Benar Bertahan
+
+Ada jebakan terkenal di mana Docker menulis aturan `iptables`-nya sendiri dan mempublikasikan port kontainer langsung melewati `ufw`. Kita menambah aturan firewall, aturannya terbaca benar, dan kontainernya tetap terbuka. Orang kehilangan basis data karena ini.
+
+Podman rootless, yang disiapkan [Bagian 3](/blogs/vps-setup-part-3), tidak begitu. Ia berjalan sebagai pengguna biasa, jadi tidak punya hak menulis ulang firewall host. Port yang dipublikasikan ditangani di userspace dan tiba sebagai trafik biasa di host, jadi `ufw` melihatnya seperti yang lain.
+
+Ini keunggulan yang tidak pernah muncul di perbandingan fitur tapi benar-benar mengurangi jumlah cara kita bisa salah. Saya menulis lebih panjang soal trade-off-nya di [Kenapa Saya Memilih Podman Ketimbang Docker](/blogs/why-podman-over-docker).
+
+# Fail2ban
+
+Firewall mengatur port mana yang terbuka. Ia tidak berpendapat soal apa yang terjadi di port yang sudah terbuka.
+
+Port 22022 harus menerima koneksi dari mana saja, jadi siapa pun bisa mengetuk terus. `fail2ban` mengawasi log dan mem-ban sementara alamat yang gagal berulang kali.
+
+Layak jujur soal manfaatnya. Dengan autentikasi kata sandi dimatikan di Bagian 1, brute force bukan ancaman nyata, karena tidak ada yang bisa menebak kunci Ed25519. Jadi `fail2ban` bukan yang menahan penyerang di sini. Yang kita dapat adalah log yang lebih tenang, dan log yang bisa dibaca itu log di mana kita akan menyadari kalau ada yang aneh.
+
+Satu dependensi dulu. Backend jurnal di bawah adalah binding Python, bukan sesuatu yang diimplementasikan `fail2ban` sendiri:
+
+```bash
+sudo apt install -y python3-systemd
+```
+
+Ia masuk lewat Recommends, jadi `apt install fail2ban` biasa sudah membawanya. Kalau dipasang dengan `--no-install-recommends`, atau kita mewarisi image dari orang yang melakukannya, jail-nya gagal diinisialisasi dan cuma bilang begitu di log layanan:
+
+```output
+Failed to initialize any backend for Jail 'sshd'
+```
+
+Jangan pernah menyunting `jail.conf` langsung, karena pembaruan paket akan menimpanya. Buat override sendiri:
+
+```bash
+sudo nano /etc/fail2ban/jail.local
+```
+
+```ini
+[DEFAULT]
+backend = systemd
+banaction = ufw
+bantime = 1h
+findtime = 10m
+maxretry = 5
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+port = 22022
+```
+
+Baris demi baris:
+
+- `backend = systemd` membaca dari jurnal, bukan berkas log. Debian 13 tidak menyertakan `/var/log/auth.log` tradisional, jadi backend berbasis berkas akan duduk mengawasi ketiadaan dan melaporkan tidak ada masalah.
+- `banaction = ufw` menulis ban sebagai aturan `ufw`. Default-nya, `iptables-multiport`, jalan, tapi ban-nya jadi tidak terlihat oleh `sudo ufw status`, padahal itu perintah yang secara naluriah kita jalankan waktu mencari tahu kenapa sebuah alamat tidak bisa masuk.
+- `bantime = 1h` lama sebuah ban berlaku.
+- `findtime` dan `maxretry` bersama berarti lima kegagalan dalam sepuluh menit memicunya.
+- `ignoreip` menjaga localhost supaya tidak kena ban. Kalau punya IP statis di rumah, menambahkannya di sini asuransi murah supaya tidak mem-ban diri sendiri.
+- `port = 22022` harus cocok dengan port SSH yang sebenarnya. Ini baris yang sering dilupakan, dan jail-nya lalu mengawasi port yang salah sambil kelihatan sehat.
+
+```bash
+sudo systemctl enable --now fail2ban
+sudo fail2ban-client status sshd
+```
+
+```output
+Status for the jail: sshd
+|- Filter
+|  |- Currently failed: 0
+|  |- Total failed:     0
+|  `- Journal matches:  _SYSTEMD_UNIT=ssh.service + _COMM=sshd
+`- Actions
+   |- Currently banned: 0
+   |- Total banned:     0
+   `- Banned IP list:
+```
+
+Semua nol di hari pertama. Yang penting baris `Journal matches`. Kalau kosong, jail-nya jalan tapi tidak mengawasi apa pun, dan itu kelihatan persis sama dengan jail yang bekerja sempurna.
+
+Balik lagi ke perintah itu sehari kemudian:
+
+```output
+Status for the jail: sshd
+|- Filter
+|  |- Currently failed: 3
+|  |- Total failed:     847
+|  `- Journal matches:  _SYSTEMD_UNIT=ssh.service + _COMM=sshd
+`- Actions
+   |- Currently banned: 6
+   |- Total banned:     41
+   `- Banned IP list:   45.148.10.92 92.63.197.14 141.98.11.72 ...
+```
+
+Trafik itu selalu ada. Kita saja yang sebelumnya tidak bisa melihatnya.
+
+# Pembaruan Keamanan Otomatis
+
+Semua di atas penyiapan sekali jalan. Menambal tidak, dan masalah jujurnya saya tidak akan ingat melakukannya tiap minggu.
+
+Jadi saya suruh mesinnya yang mengerjakan:
+
+```bash
+sudo apt install -y unattended-upgrades apt-listchanges
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+Perintah kedua membuka dialog layar penuh dengan satu pertanyaan:
+
+```output
+ ┌─────────────────┤ Configuring unattended-upgrades ├──────────────────┐
+ │ Automatically download and install stable updates?                   │
+ │                                                                      │
+ │                    <Yes>                    <No>                     │
+ └──────────────────────────────────────────────────────────────────────┘
+```
+
+Jawab `<Yes>`.
+
+Secara bawaan ini cuma menerapkan pembaruan keamanan, dan itu trade-off yang tepat. Upgrade otomatis untuk segalanya berisiko mendatangkan perubahan yang merusak jam 3 pagi tanpa ada yang mengawasi. Patch keamanan itu jenis yang menundanya lebih berbahaya daripada memasangnya.
+
+Satu pengaturan yang layak dinyalakan:
+
+```bash
+sudo nano /etc/apt/apt.conf.d/50unattended-upgrades
+```
+
+```text
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+```
+
+Kernel lama menumpuk di `/boot`, dan di VPS dengan partisi boot kecil itu akhirnya penuh. Kegagalannya membingungkan waktu terjadi, karena munculnya sebagai `apt` yang rusak, bukan disk yang penuh.
+
+Paksa dry run untuk memastikan jalan, daripada menunggu sehari:
+
+```bash
+sudo unattended-upgrade --dry-run --debug
+```
+
+```output
+Initial blacklist:
+Initial whitelist (not strict):
+Starting unattended upgrades script
+Allowed origins are: origin=Debian,codename=trixie,label=Debian-Security
+Packages that will be upgraded: libssl3t64 openssl
+Writing dpkg log to /var/log/unattended-upgrades/unattended-upgrades-dpkg.log
+```
+
+Baca baris `Allowed origins`: keamanan saja, sesuai maksudnya. Kalau daftarnya memuat origin `trixie` polos, ini akan meng-upgrade semuanya tanpa pengawasan, dan itu bukan yang kita mau jam 3 pagi.
+
+Ini tidak melakukan reboot untuk pembaruan kernel. Reboot otomatis bisa diatur, tapi yang itu saya lebih suka mengerjakannya sendiri. `sudo reboot` setelah memastikan tidak ada yang sedang berjalan itu harga kecil supaya server tidak restart di tengah sesuatu yang penting.
+
+# Membatasi Jurnal
+
+Satu hal lagi yang tidak memakan biaya sekarang dan mencegah satu sore yang membingungkan nanti.
+
+Semua di server ini mencatat ke jurnal, termasuk semua kontainer mulai [Bagian 3](/blogs/vps-setup-part-3). Secara bawaan systemd membiarkannya tumbuh sampai 10% filesystem, yang di disk 25 GB berarti 2,5 GB log yang tidak akan pernah dibaca siapa pun.
+
+```bash
+sudo nano /etc/systemd/journald.conf
+```
+
+```ini
+[Journal]
+SystemMaxUse=200M
+MaxRetentionSec=1month
+```
+
+```bash
+sudo systemctl restart systemd-journald
+journalctl --disk-usage
+```
+
+```output
+Archived and active journals take up 46.8M in the file system.
+```
+
+Dua ratus megabita jauh lebih banyak riwayat daripada yang dibutuhkan server pribadi, dan ini menghindari kegagalan yang menyebalkan. Disk penuh munculnya sebagai kontainer yang menolak start dan `apt` yang rusak, tanpa ada yang menunjuk ke penyebab sebenarnya.
+
+# Posisi Server Sekarang
+
+Mesinnya sudah berubah bentuk:
+
+- SSH menjawab di port non-standar, kunci saja, tanpa login root
+- Firewall tolak-secara-bawaan dengan tepat empat port terbuka
+- Kegagalan berulang di-ban otomatis
+- Patch keamanan memasang dirinya sendiri
+- Swap menyerap lonjakan memori alih-alih kalah dari OOM killer
+- Log dibatasi supaya tidak diam-diam memenuhi disk
+
+Tidak satu pun dari itu melayani satu request. Belum ada aplikasi, domain, atau sertifikat. Yang ada adalah mesin yang bisa saya isi sesuatu tanpa mengkhawatirkan fondasinya.
+
+# Bagian Selanjutnya
+
+Di [Bagian 3](/blogs/vps-setup-part-3), server dapat cara untuk benar-benar menjalankan sesuatu: Podman rootless, potongan yang tidak dipasangkan Debian Minimal, dan satu pengaturan yang menentukan apakah kontainer kita bertahan setelah logout.
