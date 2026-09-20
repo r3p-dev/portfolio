@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 
+// CSS Tailwind hasil build tidak deterministik antar environment (beda dari
+// build lokal `bun run build`). Jalankan script ini dari dist/ hasil `podman
+// build .` (image production sungguhan), bukan build lokal, biar hash-nya
+// cocok dengan yang benar-benar dikirim ke browser.
+
 const DYNAMIC_ROUTES = ['/guestbook', '/id/guestbook']
 
 const found = { script: new Set<string>(), style: new Set<string>() }
