@@ -1,0 +1,27 @@
+{
+	email ganti@email.kamu
+}
+
+www.r3p.dev {
+	redir https://r3p.dev{uri} permanent
+}
+
+r3p.dev {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		
+		Content-Security-Policy "default-src 'none'; script-src 'self' 'sha256-YF0+4zgwK0OYRuCG7H0LgRP7JXC+R0x19/Df4xInEhI=' 'sha256-7Y5DdrJPKzbKvXeVK3kY8EQL54THfYX/kvi66wgFR5k=' 'sha256-N1Nq3v68GEbC1hBTW5YUnkviL641wJ41aLcW/Jr6Noo=' 'sha256-CuBtD/SGgiMmVnuDRFbCUTU+BtNLZsM2YwSq9dq+2GI=' 'sha256-dyg2/AtwYrFnIYMsCUV6ON3rV+IS84gBhQJFcetP0YA=' 'sha256-Vvf1EiF3v4OKDQYxxZ3fnCUDnSGqppKzJ7UFi4o96jU=' 'sha256-VL9TSFA/TOjjzB8qzUqzsYpcySLawYFaMXL6kcbDRsc=' 'sha256-e7VjkCK6L+5vYb906aKmVfm4ZKop62V4PW+qfzAUeFA='; style-src 'self' 'sha256-AKc4jBfeE0npmser11EkH2mL3zxqXldVx+P25koFDOI=' 'sha256-SjWNj6Pb2uTaCX5X0pma8KqIQKP/KqloxEzCoUovGkU='; img-src 'self'; font-src 'self'; manifest-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		-Server
+	}
+
+	@immutable path /_astro/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+	reverse_proxy portfolio:4321
+}

@@ -13,9 +13,10 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
+  REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  build-and-deploy:
+  build:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (
@@ -29,11 +30,14 @@ jobs:
       contents: read
       packages: write
 
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.REF }}
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -56,73 +60,42 @@ jobs:
           sbom: false
           tags: |
             ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+            ${{ env.IMAGE }}:${{ env.REF }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
-        env:
-          IMAGE: ${{ env.IMAGE }}
-          DIGEST: ${{ steps.push.outputs.digest }}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout deploy script
+        uses: actions/checkout@v6
         with:
-          host: ${{ secrets.VPS_HOST }}
-          port: ${{ secrets.VPS_PORT }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          envs: IMAGE,DIGEST
-          command_timeout: 10m
-          script: |
-            set -euo pipefail
+          ref: ${{ env.REF }}
+          sparse-checkout: deploy/deploy.sh
+          sparse-checkout-cone-mode: false
 
-            export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-            export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+      - name: Join tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          ping: ${{ secrets.VPS_HOST }}
 
-            HEALTH_URL="http://localhost:4321/"
-
-            PREVIOUS_DIGEST="$(podman image inspect "${IMAGE}:latest" --format '{{.Digest}}' 2>/dev/null || true)"
-
-            echo "Pulling ${IMAGE}@${DIGEST}"
-            podman pull "${IMAGE}@${DIGEST}"
-
-            podman tag "${IMAGE}@${DIGEST}" "${IMAGE}:latest"
-
-            echo "Restarting application"
-            systemctl --user restart portfolio
-
-            echo "Waiting for health"
-            SERVICE_OK=false
-            for _ in $(seq 1 30); do
-              if systemctl --user is-active --quiet portfolio \
-                && curl -fsS --max-time 2 "$HEALTH_URL" > /dev/null; then
-                SERVICE_OK=true
-                break
-              fi
-              sleep 1
-            done
-
-            if [ "$SERVICE_OK" = false ]; then
-              echo "Deployment failed, dumping diagnostics"
-              systemctl --user status portfolio --no-pager --lines 50 || true
-              podman logs --tail 50 portfolio || true
-
-              if [ -n "$PREVIOUS_DIGEST" ]; then
-                echo "Rolling back to ${PREVIOUS_DIGEST}"
-                podman tag "${IMAGE}@${PREVIOUS_DIGEST}" "${IMAGE}:latest"
-                systemctl --user restart portfolio
-                sleep 5
-
-                if systemctl --user is-active --quiet portfolio && curl -fsS --max-time 5 "$HEALTH_URL" > /dev/null; then
-                  echo "Rollback successful, previous version restored"
-                else
-                  echo "Rollback also failed, service may be down"
-                fi
-              else
-                echo "No previous digest found locally, cannot roll back"
-              fi
-
-              exit 1
-            fi
-
-            echo "Deployment successful"
-            podman image prune -f
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=15 \
+              "deploy@${VPS_HOST}" \
+              "bash -s -- '${IMAGE}' '${DIGEST}'" \
+            < deploy/deploy.sh

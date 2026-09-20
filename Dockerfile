@@ -21,6 +21,7 @@ FROM base AS release
 COPY --from=install /temp/prod/node_modules node_modules
 COPY --from=prerelease /usr/src/app/package.json ./package.json
 COPY --from=prerelease /usr/src/app/dist ./dist
+COPY --from=prerelease /usr/src/app/deploy/healthcheck.ts ./healthcheck.ts
 
 ENV PORT=4321
 ENV HOST=0.0.0.0

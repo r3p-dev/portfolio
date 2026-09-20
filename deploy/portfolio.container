@@ -1,0 +1,27 @@
+[Unit]
+Description=r3p.dev portfolio
+
+[Container]
+Image=ghcr.io/r3p-dev/portfolio:latest
+ContainerName=portfolio
+Network=web.network
+
+Volume=portfolio-data:/app/data
+Pull=never
+
+NoNewPrivileges=true
+DropCapability=all
+
+HealthCmd=bun healthcheck.ts
+HealthInterval=30s
+HealthStartPeriod=20s
+HealthRetries=3
+HealthTimeout=5s
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
