@@ -1,5 +1,4 @@
 import { getAbsoluteLocaleUrl, getAbsoluteLocaleUrlList } from 'astro:i18n'
-
 import { defaultLocale, locales, type Locale } from '@lib/i18n'
 
 export type Alternate = {

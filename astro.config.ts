@@ -5,7 +5,6 @@ import node from '@astrojs/node'
 import { rehypeHeadingIds, unified } from '@astrojs/markdown-remark'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import tailwindcss from '@tailwindcss/vite'
-
 import { rehypeDemoteHeadings } from '@plugins/rehype-demote-headings'
 import { rehypeScrollableTables } from '@plugins/rehype-scrollable-tables'
 import { shikiCodeBlocks } from '@plugins/shiki-code-blocks'
@@ -74,6 +73,7 @@ export default defineConfig({
         rehypeDemoteHeadings,
         rehypeHeadingIds,
         rehypeScrollableTables,
+
         [
           rehypeAutolinkHeadings,
           {
