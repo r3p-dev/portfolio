@@ -1,0 +1,412 @@
+---
+title: 'How to Set Up a VPS for Beginners, from a Beginner (Part 4: Traefik and HTTPS)'
+description: Part 4 of setting up my first VPS on Debian 13. Traefik as a rootless reverse proxy, with ports handed over by systemd, automatic Let's Encrypt certificates, HTTP/3, security headers, and routes that come from container labels.
+date: '2026-05-23'
+tags: [vps, debian, podman, quadlet, traefik, https]
+---
+
+> **A 5-part series.**
+>
+> - [Part 1: Securing the Base System](/blogs/vps-setup-1)
+> - [Part 2: Firewall, Bans & Updates](/blogs/vps-setup-2)
+> - [Part 3: Rootless Podman](/blogs/vps-setup-3)
+> - **Part 4: Traefik & HTTPS**
+> - [Part 5: Deploying, and One Script for All of It](/blogs/vps-setup-5)
+
+# Where We Are
+
+After [Part 3](/blogs/vps-setup-3), the server can run containers that survive reboots. But nothing can reach them from outside yet, and there's no HTTPS.
+
+That's the reverse proxy's job. It's the one thing listening on ports 80 and 443. It gets certificates from Let's Encrypt, and passes each request to the right container based on the domain.
+
+# Why Traefik
+
+I went with Traefik because it can find apps by itself. It watches Podman, and when a container starts with a few labels saying "I'm `app.example.com`, I listen on port 3000", Traefik adds the route and gets a certificate for it. When the container stops, the route goes away.
+
+That matters for Part 5, where apps get deployed on every `git push`. I never want to edit a proxy config file by hand when a new app shows up.
+
+# Letting Traefik See the Containers
+
+Traefik learns about containers through the Docker API. Podman can serve the same API, from a socket owned by my user:
+
+```bash
+systemctl --user enable --now podman.socket
+ls $XDG_RUNTIME_DIR/podman/podman.sock
+```
+
+```output
+/run/user/1000/podman/podman.sock
+```
+
+Keep in mind that whoever can talk to this socket can control all of my containers. Traefik needs it, so further down I lock Traefik's own container down as far as it goes.
+
+# A Network for Public Apps
+
+Traefik and the apps it serves need a network they share. Quadlet can create networks too:
+
+```bash
+nano ~/.config/containers/systemd/web.network
+```
+
+```ini
+[Network]
+NetworkName=web
+```
+
+Only containers that should be public join `web`. A database never does, so Traefik can't reach it even by mistake.
+
+Certificates need to survive restarts, so they get a named volume:
+
+```bash
+nano ~/.config/containers/systemd/traefik-acme.volume
+```
+
+```ini
+[Volume]
+VolumeName=traefik-acme
+```
+
+# Traefik's Config
+
+Traefik has two kinds of config. The static one is read once at startup: ports, where to find containers, how to get certificates.
+
+```bash
+mkdir -p ~/.config/traefik/dynamic
+nano ~/.config/traefik/traefik.yml
+```
+
+```yaml
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: WARN
+  format: json
+
+entryPoints:
+  web:
+    address: ':80'
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+      aliasHeadersStrategy: delete
+      encodedCharacters:
+        allowEncodedBackSlash: false
+        allowEncodedNullCharacter: false
+  websecure:
+    address: ':443'
+    http3: {}
+    http:
+      tls:
+        certResolver: le
+      middlewares:
+        - secure@file
+      aliasHeadersStrategy: delete
+      encodedCharacters:
+        allowEncodedBackSlash: false
+        allowEncodedNullCharacter: false
+
+providers:
+  docker:
+    endpoint: 'unix:///var/run/docker.sock'
+    exposedByDefault: false
+    network: web
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  le:
+    acme:
+      email: 'you@example.org'
+      storage: /acme/acme.json
+      httpChallenge:
+        entryPoint: web
+
+api:
+  dashboard: false
+```
+
+The important parts:
+
+- **Two entry points.** `web` on port 80 only redirects to HTTPS (and answers Let's Encrypt's check). `websecure` on 443 is where everything is served, with HTTP/3 turned on.
+- **Every HTTPS route uses the `secure` middleware**, defined below. A new app can't forget its security headers because it never has to add them.
+- **`exposedByDefault: false`.** A container only gets a route if it asks for one with `traefik.enable=true`.
+- **`le`** is the Let's Encrypt setup. Put your real e-mail there; Let's Encrypt uses it to warn about certificates that are about to expire.
+- **`aliasHeadersStrategy` and `encodedCharacters`** drop a couple of tricks with odd headers and encoded characters in URLs that can confuse apps behind the proxy.
+- **No dashboard.** I don't need it, and it's one less thing exposed.
+
+While testing, add `caServer: 'https://acme-staging-v02.api.letsencrypt.org/directory'` under `acme`. Let's Encrypt has rate limits, and a few broken attempts in a row can block you for a while. The staging server gives fake certificates with no limits. Remove the line once everything works.
+
+The dynamic config is the other kind. Traefik reloads it whenever the file changes:
+
+```bash
+nano ~/.config/traefik/dynamic/00-defaults.yml
+```
+
+```yaml
+http:
+  middlewares:
+    secure:
+      chain:
+        middlewares:
+          - security-headers
+          - rate-limit
+          - compress
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        customFrameOptionsValue: SAMEORIGIN
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: 'camera=(), microphone=(), geolocation=(), payment=()'
+        customResponseHeaders:
+          Server: ''
+          X-Powered-By: ''
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+    compress:
+      compress:
+        minResponseBodyBytes: 1024
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+```
+
+`secure` is three middlewares chained together:
+
+- **Security headers.** HSTS tells browsers to only ever use HTTPS for this domain. The others stop MIME sniffing and framing by other sites, limit what the referrer leaks, and switch off camera, microphone and location access. `Server` and `X-Powered-By` are removed so the response doesn't advertise what's running.
+- **Rate limit.** 100 requests per second per client IP, with bursts up to 200. Plenty for a person, and it slows down anything hammering the server.
+- **Compression** for responses over 1 KB.
+
+The `tls` part allows TLS 1.2 and up with modern ciphers only. `sniStrict` refuses connections that don't name one of my domains, so someone scanning the bare IP gets nothing back.
+
+# Letting systemd Open the Ports
+
+This is the part I spent the most time on. I want Traefik to see each visitor's real IP address, because the rate limit and the logs depend on it.
+
+So Traefik doesn't open ports 80 and 443 at all. My user's systemd opens them (allowed since the `ip_unprivileged_port_start` change in Part 3) and hands the open sockets to Traefik when it starts. Connections go straight to Traefik, with nothing in between rewriting where they came from. Traefik supports this directly: it matches each socket to an entry point by name.
+
+```bash
+nano ~/.config/systemd/user/traefik-http.socket
+```
+
+```ini
+[Unit]
+Description=Traefik :80 (HTTP → HTTPS redirect, ACME challenges)
+
+[Socket]
+ListenStream=80
+FileDescriptorName=web
+Service=traefik.service
+
+[Install]
+WantedBy=sockets.target
+```
+
+```bash
+nano ~/.config/systemd/user/traefik-https.socket
+```
+
+```ini
+[Unit]
+Description=Traefik :443 (HTTPS over TCP, HTTP/3 over UDP)
+
+[Socket]
+ListenStream=443
+ListenDatagram=443
+FileDescriptorName=websecure
+Service=traefik.service
+
+[Install]
+WantedBy=sockets.target
+```
+
+`FileDescriptorName` has to match the entry point names in `traefik.yml`, `web` and `websecure`. `ListenDatagram=443` is the UDP socket for HTTP/3.
+
+# The Traefik Container
+
+```bash
+nano ~/.config/containers/systemd/traefik.container
+```
+
+```ini
+[Unit]
+Description=Traefik reverse proxy (socket-activated)
+Requires=traefik-http.socket traefik-https.socket podman.socket
+After=traefik-http.socket traefik-https.socket podman.socket
+
+[Container]
+Image=docker.io/library/traefik:v3.7
+ContainerName=traefik
+Network=web.network
+Notify=true
+AutoUpdate=registry
+NoNewPrivileges=true
+ReadOnly=true
+DropCapability=ALL
+PidsLimit=256
+PodmanArgs=--memory=256m
+Volume=%t/podman/podman.sock:/var/run/docker.sock
+Volume=%h/.config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+Volume=%h/.config/traefik/dynamic:/etc/traefik/dynamic:ro
+Volume=traefik-acme.volume:/acme
+
+[Service]
+Sockets=traefik-http.socket traefik-https.socket
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
+```
+
+Going through it:
+
+- `Sockets=` is where systemd passes in the two sockets from above.
+- The Podman socket is mounted where Traefik expects Docker's. `%t` is my user's runtime directory and `%h` is my home directory.
+- The config files are mounted read-only.
+- `ReadOnly`, `DropCapability=ALL`, `NoNewPrivileges`, and the memory and process limits lock the container down. Because it can reach the Podman socket, I want it as boxed in as possible.
+- `Notify=true` makes systemd wait until Traefik says it's ready before counting the start as done.
+- `AutoUpdate=registry` together with `traefik:v3.7` means Podman checks every day for a newer `v3.7` image, which is a patch release, and restarts Traefik on it. A jump to 3.8 is still my decision.
+
+Turn on the daily update check:
+
+```bash
+systemctl --user enable --now podman-auto-update.timer
+```
+
+# Starting It
+
+Make sure nothing else has the ports. Some provider images come with Apache or nginx already running:
+
+```bash
+sudo ss -ltnup '( sport = :80 or sport = :443 )'
+```
+
+That should print nothing but the header. Then check the Quadlet files, load everything, and start:
+
+```bash
+/usr/libexec/podman/quadlet -dryrun -user > /dev/null
+systemctl --user daemon-reload
+systemctl --user enable --now traefik-http.socket traefik-https.socket
+podman pull docker.io/library/traefik:v3.7
+systemctl --user start traefik
+systemctl --user status traefik
+```
+
+```output
+● traefik.service - Traefik reverse proxy (socket-activated)
+     Loaded: loaded (/home/admin/.config/containers/systemd/traefik.container; generated)
+     Active: active (running) since Tue 2026-10-14 10:12:40 WIB; 3s ago
+TriggeredBy: ● traefik-https.socket
+             ● traefik-http.socket
+```
+
+I pulled the image before starting so the first start doesn't sit there downloading. If it fails, the log says why:
+
+```bash
+journalctl --user -u traefik -n 30
+```
+
+# DNS
+
+Before Let's Encrypt can issue a certificate, the domain has to point at the server. At your DNS provider, add an A record for the domain with the server's IP. I also added a wildcard (`*.example.com`), so any new subdomain I make later works without another trip to the DNS settings.
+
+If the server has IPv6, add an AAAA record too.
+
+# Testing with a Real Domain
+
+The same `whoami` container from Part 3, now with labels instead of a published port:
+
+```bash
+nano ~/.config/containers/systemd/whoami.container
+```
+
+```ini
+[Container]
+ContainerName=whoami
+Image=docker.io/traefik/whoami
+Network=web.network
+Label=traefik.enable=true
+Label=traefik.http.routers.whoami.rule=Host(`whoami.example.com`)
+Label=traefik.http.routers.whoami.entrypoints=websecure
+Label=traefik.http.routers.whoami.tls.certresolver=le
+Label=traefik.http.services.whoami.loadbalancer.server.port=80
+
+[Install]
+WantedBy=default.target
+```
+
+Those labels are the whole proxy configuration for this app: which domain, which entry point, get a certificate from `le`, and send traffic to port 80 inside the container.
+
+```bash
+systemctl --user daemon-reload
+systemctl --user start whoami
+```
+
+Give it a few seconds to get the certificate, then from the laptop:
+
+```bash
+curl -I https://whoami.example.com
+```
+
+```output
+HTTP/2 200
+alt-svc: h3=":443"; ma=2592000
+content-type: text/plain; charset=utf-8
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: SAMEORIGIN
+```
+
+That's a valid certificate, all the security headers from the `secure` middleware, and `alt-svc` telling the browser HTTP/3 is available. `http://whoami.example.com` redirects to HTTPS.
+
+And the real IP check. Without `-I`, whoami prints the request it received:
+
+```bash
+curl -s https://whoami.example.com | grep X-Real-Ip
+```
+
+```output
+X-Real-Ip: 203.0.113.41
+```
+
+That's my laptop's public address, not some internal container address. The socket handoff works.
+
+If the certificate doesn't come, it's almost always DNS not pointing at the server yet, or port 80 blocked. Let's Encrypt checks over plain HTTP on port 80. `journalctl --user -u traefik` shows the exact error.
+
+Clean up the test:
+
+```bash
+systemctl --user stop whoami
+rm ~/.config/containers/systemd/whoami.container
+systemctl --user daemon-reload
+```
+
+# Where the Server Stands
+
+Traefik owns ports 80 and 443 through systemd and sees real client IPs. Certificates are automatic, HTTP/3 is on, every site gets the same security headers and rate limit, and a new app only needs a few labels to go live. Patch updates of Traefik install themselves.
+
+What's left is getting my own apps onto the server without SSH-ing in to copy files around. That's [Part 5](/blogs/vps-setup-5): deploying from GitHub on every push, and the script that does all five parts at once.

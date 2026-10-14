@@ -1,31 +1,30 @@
 ---
 title: 'Cara Menyiapkan VPS untuk Pemula, dari Seorang Pemula (Bagian 1: Mengamankan Sistem Dasar)'
-description: Bagian 1 dari penyiapan VPS pertama saya di Debian 13 Minimal. Akses awal, pembaruan sistem, kunci SSH, pengguna non-root, dan hardening SSH, sebelum ada layanan apa pun masuk ke mesin.
+description: Bagian 1 dari penyiapan VPS pertama saya di Debian 13. Update, memberi nama server, satu pengguna dengan kunci SSH dan sudo, dan konfigurasi SSH yang hanya mengizinkan pengguna itu masuk.
 date: '2026-05-20'
+updated: '2026-10-15'
 tags: [vps, debian, server, ssh, security, linux]
 ---
 
 > **Seri 5 bagian.**
 >
-> · **Bagian 1 — Mengamankan Sistem Dasar**
->
-> · [Bagian 2 — Firewall & Ban](/blogs/vps-setup-part-2)
->
-> · [Bagian 3 — Podman Rootless](/blogs/vps-setup-part-3)
->
-> · [Bagian 4 — Caddy & HTTPS](/blogs/vps-setup-part-4)
->
-> · [Bagian 5 — Men-deploy Aplikasi](/blogs/vps-setup-part-5)
+> - **Bagian 1: Mengamankan Sistem Dasar**
+> - [Bagian 2: Firewall, Ban & Update](/id/blogs/vps-setup-2)
+> - [Bagian 3: Podman Rootless](/id/blogs/vps-setup-3)
+> - [Bagian 4: Traefik & HTTPS](/id/blogs/vps-setup-4)
+> - [Bagian 5: Deploy, dan Satu Skrip untuk Semuanya](/id/blogs/vps-setup-5)
 
 # Pendahuluan
 
-VPS baru itu bersih sekaligus terbuka lebar. Belum ada yang dikonfigurasi, yang artinya belum ada juga yang melindunginya. Jadi kondisinya nanti benar-benar tergantung apa yang kita lakukan di satu jam pertama.
+Ini VPS pertama saya. Mesin Debian 13 kecil, dan saya mau menjalankan proyek-proyek saya sendiri di sana, mulai dari situs ini.
 
-Tulisan ini bukan instruksi yang harus diikuti persis. Ini catatan bagaimana saya membawa server mentah ke kondisi yang saya sendiri berani pakai untuk membangun sesuatu.
+Server baru belum dikonfigurasi apa-apa, jadi belum ada juga yang melindunginya. Saya mau paham setiap langkahnya sebelum menaruh apa pun di sana, jadi semuanya saya kerjakan manual dan saya catat sambil jalan. Itulah seri ini.
+
+Di akhir, semuanya saya jadikan satu skrip, [`vps-setup.sh`](https://github.com/r3p-dev/dotfiles/blob/main/vps-setup.sh). Kalau cuma mau hasilnya, [Bagian 5](/id/blogs/vps-setup-5) menunjukkan cara menjalankannya. Kalau mau tahu apa yang dilakukannya ke server kita, mulai dari sini.
 
 # Akses Pertama
 
-Koneksi pertama lewat SSH sebagai root:
+Provider memberi IP dan login root. Sambungkan:
 
 ```bash
 ssh root@IP_VPS
@@ -35,78 +34,84 @@ ssh root@IP_VPS
 The authenticity of host 'IP_VPS (IP_VPS)' can't be established.
 ED25519 key fingerprint is SHA256:qL3nR8vT1wX5yZ0aB4cD7eF9gH2jK6mN8pQ1rS3tU5v.
 Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
-root@IP_VPS's password:
 
 Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
 root@vps:~#
 ```
 
-Prompt fingerprint itu muncul sekali per server. Kalau nanti muncul lagi untuk host yang sudah pernah kita sambungi, berarti ada yang berubah pada mesin yang menjawab, dan lebih baik dicari tahu dulu daripada langsung mengetik `yes`.
+Pertanyaan fingerprint itu cuma muncul sekali. Kalau suatu saat muncul lagi untuk server yang sama, berarti ada yang berubah di sisi sana, dan saya mau tahu apa sebelum mengetik `yes`.
 
-Root tidak punya batasan sama sekali. Praktis untuk sepuluh menit pertama, setelah itu berhenti jadi ide bagus. Tidak ada pemisahan antara pekerjaan rutin dan hal yang bisa merusak sistem, jadi setiap perintah punya bobot yang sama. Akses root di sini cuma jalan masuk, bukan akun yang mau saya pakai terus.
+Saya akan pakai root beberapa menit ke depan, lalu tidak pernah login sebagai root lagi.
 
-# Memperbarui Sistem
+# Update
 
-Meski servernya baru dibuat beberapa menit lalu, paket di dalamnya berasal dari base image yang dipakai penyedia. Jadi hal pertama adalah update:
+Server dibuat dari image milik provider, dan image itu tidak pernah benar-benar terbaru:
 
 ```bash
-apt update && apt upgrade -y
+apt update && apt full-upgrade -y
 ```
-
-> Tanpa `sudo`, karena kita masih root. Di instalasi Debian yang benar-benar minimal, `sudo` bahkan belum ada. Paketnya baru dipasang di bagian berikutnya.
 
 ```output
 Hit:1 http://deb.debian.org/debian trixie InRelease
 Get:2 http://security.debian.org/debian-security trixie-security InRelease [48.0 kB]
-Get:3 http://deb.debian.org/debian trixie-updates InRelease [55.4 kB]
-Fetched 103 kB in 1s (98.2 kB/s)
-Reading package lists... Done
-Building dependency tree... Done
-14 packages can be upgraded. Run 'apt list --upgradable' to see them.
 ...
 14 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
 ```
 
-Empat belas paket sudah kedaluwarsa di server yang umurnya baru beberapa menit. Itu alasan kenapa langkah ini duluan.
+Saya pakai `full-upgrade`, bukan `upgrade`, karena `full-upgrade` boleh memasang atau menghapus package kalau update-nya butuh, misalnya package kernel baru. `upgrade` biasa malah menahannya.
 
-# Memilih Apa yang Dipasang
-
-Di titik ini gampang tergoda memasang semua yang kelihatan berguna. Saya coba batasi ke hal-hal yang memang akan saya pakai untuk mengurus mesinnya dan menjalankan kontainer nanti:
+Lalu beberapa yang dasar:
 
 ```bash
-apt install -y sudo curl git btop ufw fail2ban podman
+apt install -y sudo curl ca-certificates nano less
+```
+
+`sudo` saya taruh paling depan karena ada alasannya. Image minimal Debian tidak membawa `sudo`, tapi grup `sudo` tetap ada, jadi menambahkan pengguna ke grup itu berhasil tanpa pesan apa pun. Kalau login root lalu dimatikan padahal perintah `sudo`-nya tidak ada, tidak ada lagi akun yang bisa membereskan apa pun.
+
+Bagian-bagian berikutnya memasang yang mereka butuhkan masing-masing.
+
+# Nama dan Waktu
+
+Dua hal kecil. Hostname muncul di prompt dan di setiap baris log, dan `vps` atau `debian` tidak akan berarti apa-apa buat saya nanti:
+
+```bash
+hostnamectl set-hostname my-vps
+nano /etc/hosts
+```
+
+```text
+127.0.1.1	my-vps
+```
+
+Baris di `/etc/hosts` itu harus sama dengan nama baru, kalau tidak `sudo` akan mengeluh tidak bisa menemukan host-nya.
+
+Beberapa provider mengatur hostname di setiap boot lewat cloud-init. Kalau provider kita begitu, ini mencegah namanya dikembalikan:
+
+```bash
+echo 'preserve_hostname: true' > /etc/cloud/cloud.cfg.d/99-hostname.cfg
+```
+
+Lalu zona waktu, supaya waktu di log pakai jam saya, bukan UTC:
+
+```bash
+timedatectl set-timezone Asia/Jakarta
+timedatectl set-ntp true
+timedatectl status
 ```
 
 ```output
-Reading package lists... Done
-Building dependency tree... Done
-The following additional packages will be installed:
-  catatonit conmon containers-storage crun golang-github-containers-common
-  libgpgme11t64 netavark passt uidmap
-Suggested packages:
-  containers-storage docker-compose
-0 upgraded, 34 newly installed, 0 to remove and 0 not upgraded.
-Need to get 41.2 MB of archives.
-After this operation, 168 MB of additional disk space will be used.
+               Local time: Wed 2026-05-20 16:20:33 WIB
+           Universal time: Wed 2026-05-20 09:20:33 UTC
+                 Time zone: Asia/Jakarta (WIB, +0700)
+System clock synchronized: yes
+              NTP service: active
 ```
 
-Daftar `additional packages` itu layak dilirik, jangan langsung di-scroll. Tujuh paket yang diminta menarik dua puluh delapan lainnya. Di disk 25 GB itu tidak masalah, tapi kebiasaan memperhatikannya tetap berguna.
+Yang saya cari `System clock synchronized: yes`. Jam yang salah bikin sertifikat HTTPS gagal dengan cara yang membingungkan. Kalau `NTP service` bilang `n/a`, image-nya datang tanpa klien waktu, dan `apt install -y systemd-timesyncd` membereskannya.
 
-`sudo` ada di urutan pertama karena satu hal yang sempat menjebak saya. Debian Minimal tidak menyertakannya. **Grup** `sudo` tetap ada, jadi `usermod -aG sudo admin` di bawah nanti berhasil dan tidak mencetak apa-apa, entah binary-nya terpasang atau tidak. Kalau setelah itu login root dimatikan, tidak ada lagi akun yang bisa mengurus mesin ini. Pasang sekarang.
+# Kunci SSH
 
-## Kenapa Podman
-
-Pertanyaan yang wajar muncul: kenapa `podman`, bukan `docker`, padahal Docker masih yang dipakai kebanyakan lingkungan produksi.
-
-Jawabannya soal konteks. Ini satu mesin yang saya urus sendiri, bukan bagian dari klaster. Podman menjalankan kontainer tanpa daemon, jadi tidak ada proses terpusat yang kalau mati semuanya ikut mati. Podman juga memperlakukan rootless sebagai mode normal, bukan opsi tambahan, dan itu cocok untuk mesin yang baru saja terekspos ke internet.
-
-Ekosistem dan perkakas Docker lebih matang, dan itu keunggulan nyata di kebanyakan tim. Tapi Docker juga mengasumsikan setup operasional yang lebih rumit dari yang saya punya di sini. Saya memilih Podman karena ia menghilangkan hal-hal yang belum saya butuhkan, bukan karena Docker salah.
-
-# Beralih ke Kunci SSH
-
-Login pakai kata sandi memang jalan, tapi kata sandi bergantung pada kebiasaan manusia, jadi bisa ditebak dan sering dipakai ulang. Di server publik itu titik lemah yang lebih baik tidak dipelihara.
-
-Buat pasangan kuncinya:
+Password bisa ditebak. Kunci tidak, setidaknya tidak dengan cara yang masuk akal. Jadi sebelum yang lain, saya buat kunci di laptop (bukan di server):
 
 ```bash
 ssh-keygen -t ed25519 -C "vps-personal"
@@ -116,14 +121,11 @@ ssh-keygen -t ed25519 -C "vps-personal"
 Generating public/private ed25519 key pair.
 Enter file in which to save the key (/home/you/.ssh/id_ed25519):
 Enter passphrase for "/home/you/.ssh/id_ed25519" (empty for no passphrase):
-Enter same passphrase again:
 Your identification has been saved in /home/you/.ssh/id_ed25519
 Your public key has been saved in /home/you/.ssh/id_ed25519.pub
-The key fingerprint is:
-SHA256:7hJ2kL9mN4pQ6rS8tU0vW3xY5zA1bC7dE9fG2hI4jK6 vps-personal
 ```
 
-Dua berkas. `id_ed25519` tetap di mesin ini. `id_ed25519.pub` yang dibagikan.
+Hasilnya dua berkas. `id_ed25519` itu privat dan tidak pernah keluar dari laptop. `id_ed25519.pub` yang saya berikan ke server:
 
 ```bash
 cat ~/.ssh/id_ed25519.pub
@@ -133,114 +135,50 @@ cat ~/.ssh/id_ed25519.pub
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH8kR2pQ7mZvN1xW4tYbL9cD0eF3gH5jK7lM2nP4qR6s vps-personal
 ```
 
-Satu baris: tipe kunci, kuncinya, dan komentar dari `-C`. Kalau yang muncul diawali `-----BEGIN OPENSSH PRIVATE KEY-----`, itu berkas yang salah dan tidak boleh keluar dari mesin kita.
+Kalau yang muncul diawali `-----BEGIN OPENSSH PRIVATE KEY-----`, itu berkas yang salah.
 
-Setelah ini server berhenti memeriksa kata sandi dan mulai memeriksa apakah kunci privat yang kita pegang cocok dengan kunci publik di `authorized_keys`. Tidak ada lagi yang bisa di-brute force.
+Saya pilih Ed25519 karena kuncinya pendek dan cepat, dan semua OpenSSH modern mendukungnya. RSA juga bisa, tapi minimal harus 2048 bit supaya ada gunanya.
 
-# Memasang Kunci di Server
+# Satu Pengguna untuk Semuanya
 
-Kunci publiknya harus sampai ke `~/.ssh/authorized_keys` di server. Bisa dilakukan manual, tapi `ssh-copy-id` mengurus permission-nya dengan benar dalam satu baris. Jalankan dari **mesin lokal**:
+Saya tidak mau bekerja sebagai root. Saya juga tidak mau punya banyak akun. Jadi server ini dapat tepat satu pengguna biasa, dan pengguna itu yang mengerjakan semuanya: login, pakai `sudo`, dan nanti memiliki semua kontainer.
+
+Kembali ke server, sebagai root:
 
 ```bash
-ssh-copy-id root@IP_VPS
+useradd --create-home --shell /bin/bash admin
+usermod -aG sudo,adm,systemd-journal admin
+passwd admin
 ```
 
 ```output
-/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/you/.ssh/id_ed25519.pub"
-/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
-/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
-root@IP_VPS's password:
-
-Number of key(s) added: 1
-
-Now try logging into the machine, with:   "ssh 'root@IP_VPS'"
-and check to make sure that only the key(s) you wanted were added.
-```
-
-Ia memakai kata sandi untuk terakhir kalinya, menambahkan kuncinya alih-alih menimpa yang sudah ada, dan membuat `~/.ssh` dengan mode yang benar.
-
-Bagian terakhir itu yang biasanya bikin gagal kalau dikerjakan manual. SSH tidak mau memakai direktori kunci yang bisa dibaca pengguna lain, dan penolakannya diam-diam: kita cuma dapat prompt kata sandi tanpa penjelasan. Cek hasilnya:
-
-```bash
-ls -la ~/.ssh
-```
-
-```output
-drwx------ 2 root root 4096 May 20 09:22 .
-drwx------ 6 root root 4096 May 20 09:22 ..
--rw------- 1 root root  102 May 20 09:22 authorized_keys
-```
-
-`drwx------` itu 700, `-rw-------` itu 600. Cuma pemilik. Kalau suatu saat memasang kunci manual dan login terus minta kata sandi, ini yang pertama dilihat.
-
-Pastikan dulu sebelum lanjut:
-
-```bash
-ssh root@IP_VPS
-```
-
-```output
-Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-Last login: Wed May 20 09:18:44 2026 from 203.0.113.41
-root@vps:~#
-```
-
-Langsung ke prompt, tanpa baris kata sandi. Kalau masih ditanya, kuncinya tidak diterima, dan penyebabnya hampir selalu permission tadi.
-
-# Membuat Pengguna Baru
-
-Menjalankan semuanya sebagai root menghapus batas antara pekerjaan biasa dan perubahan tingkat sistem. Jadi langkah berikutnya adalah akun untuk keperluan sehari-hari:
-
-```bash
-adduser admin
-```
-
-```output
-info: Adding user `admin' ...
-info: Selecting UID/GID from range 1000 to 59999 ...
-info: Adding new group `admin' (1000) ...
-info: Adding new user `admin' (1000) with group `admin (1000)' ...
-info: Creating home directory `/home/admin' ...
-info: Copying files from `/etc/skel' ...
 New password:
 Retype new password:
 passwd: password updated successfully
-Changing the user information for admin
-Enter the new value, or press ENTER for the default
-	Full Name []:
-	Room Number []:
-...
-Is the information correct? [Y/n] Y
 ```
 
-Semua isian setelah kata sandi boleh dikosongkan. Kata sandinya tetap diisi meski login nanti pakai kunci, karena `sudo` akan menanyakannya.
+Grupnya:
 
-Lalu beri hak sudo:
+- `sudo` untuk menjalankan perintah admin.
+- `adm` dan `systemd-journal` untuk membaca log sistem tanpa harus mengetik `sudo` terus.
+
+Password-nya cuma untuk `sudo`. Login akan pakai kunci saja beberapa menit lagi.
+
+Cek dulu `sudo` benar-benar jalan untuk pengguna baru sebelum mengandalkannya:
 
 ```bash
-usermod -aG sudo admin
-groups admin
-```
-
-```output
-admin : admin sudo
-```
-
-`usermod` tidak mencetak apa pun, jadi `groups` yang dipakai untuk memastikan.
-
-Keanggotaan grup dan `sudo` yang benar-benar jalan itu dua hal berbeda, dan selisihnya baru kelihatan setelah login root ditutup. Uji dari shell `admin` sekarang juga:
-
-```bash
-sudo -v
+su - admin -c 'sudo -v'
 ```
 
 ```output
 [sudo] password for admin:
 ```
 
-Prompt yang menerima kata sandi lalu mengembalikan kita ke shell, itu yang diharapkan. `sudo: command not found` berarti paketnya belum ada, jadi balik dulu dan pasang selagi root masih bisa dipakai.
+Kalau ia minta password dan menerimanya, aman. `sudo: command not found` berarti package-nya belum ada, jadi pasang dulu selagi root masih bisa dipakai.
 
-Akun baru butuh kunci yang sama. Perintahnya sama, targetnya beda, tetap dari mesin lokal:
+## Memberi Kunci ke Pengguna
+
+Kunci publik harus masuk ke `~/.ssh/authorized_keys` milik pengguna baru. Dari laptop:
 
 ```bash
 ssh-copy-id admin@IP_VPS
@@ -253,133 +191,187 @@ admin@IP_VPS's password:
 Number of key(s) added: 1
 ```
 
-Kata sandi yang diminta adalah yang tadi dibuat di `adduser`. Ini nyaris terakhir kalinya berguna, karena autentikasi kata sandi sebentar lagi dimatikan dan setelah itu perintah ini tidak jalan lagi.
+Ia login pakai password untuk terakhir kalinya, dan mengatur izin berkasnya dengan benar.
 
-Menyalin `/root/.ssh/authorized_keys` manual juga bisa, tapi berkasnya sampai di home `admin` dalam keadaan masih milik `root`, dan SSH mengabaikannya. `ssh-copy-id` menulis sebagai pengguna tujuan, jadi tidak ada yang perlu dibereskan setelahnya.
+Kalau image dari provider sudah mematikan login password, cara itu tidak jalan. Kalau begitu, salin kunci milik root di server:
 
-Cek akun barunya:
+```bash
+install -d -m 700 -o admin -g admin /home/admin/.ssh
+install -m 600 -o admin -g admin /root/.ssh/authorized_keys /home/admin/.ssh/authorized_keys
+```
+
+`install` membuat berkasnya dengan pemilik dan izin yang benar sekaligus. `cp` biasa akan meninggalkannya dimiliki root, dan SSH diam-diam mengabaikan berkas kunci yang bukan milik penggunanya.
+
+Coba dari laptop:
 
 ```bash
 ssh admin@IP_VPS
 ```
 
 ```output
-Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-admin@vps:~$
+Linux my-vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
+admin@my-vps:~$
 ```
 
-Prompt-nya berakhir `$`, bukan `#`. Itu shell yang memberi tahu bahwa ini bukan root.
+Tidak ada prompt password, dan prompt-nya diakhiri `$`, bukan `#`. Itu pengguna biasa yang login dengan kunci.
 
-# Mengurangi Paparan
+# Mengunci SSH
 
-Sistemnya sudah jalan, tapi masih terbuka lewat jalur yang rutin jadi sasaran serangan otomatis. Saatnya menutup sebagian:
-
-```bash
-nano /etc/ssh/sshd_config
-```
-
-Ganti portnya. Ini tidak menambah keamanan nyata, tapi mengurangi kebisingan dari bot yang memindai port 22:
-
-```text
-Port 22022
-```
-
-Matikan autentikasi kata sandi:
-
-```text
-PasswordAuthentication no
-PubkeyAuthentication yes
-```
-
-Dan matikan login root, supaya akun yang jebol tidak langsung punya hak penuh:
-
-```text
-PermitRootLogin no
-```
-
-Dua yang terakhir itu yang paling berarti. Keduanya menutup pintu masuk yang benar-benar dipakai serangan SSH otomatis.
-
-## Baris Include di Bagian Atas Berkas Itu
-
-Sebelum merestart apa pun, gulir ke atas `sshd_config`. Debian menaruh ini di sana:
+Sekarang hardening-nya. Config utama Debian ada di `/etc/ssh/sshd_config`, tapi saya tidak mengeditnya. Di bagian atas berkas itu ada baris ini:
 
 ```text
 Include /etc/ssh/sshd_config.d/*.conf
 ```
 
-`sshd` menyelesaikan konflik dengan mengambil nilai **pertama** yang ditemukan, bukan yang terakhir. Jadi apa pun di direktori itu menang atas yang baru kita tulis di bawah. Banyak image VPS menyertakan `50-cloud-init.conf` yang isinya persis pengaturan yang mau kita ubah:
+`sshd` memakai nilai **pertama** yang ia temukan untuk setiap pengaturan, dan berkas yang di-include dibaca duluan, urut abjad. Banyak image VPS membawa `50-cloud-init.conf` di sana yang isinya `PasswordAuthentication yes`. Perubahan apa pun yang kita buat di bawah berkas utama kalah dengannya.
+
+Jadi pengaturan saya taruh di berkas yang urutannya paling awal:
 
 ```bash
-ls /etc/ssh/sshd_config.d/
-cat /etc/ssh/sshd_config.d/*.conf
+sudo nano /etc/ssh/sshd_config.d/00-hardening.conf
 ```
 
-```output
-50-cloud-init.conf
-PasswordAuthentication yes
+```text
+Port 22022
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AllowUsers admin
+
+MaxAuthTries 3
+MaxSessions 4
+LoginGraceTime 20
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+PermitUserEnvironment no
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding local
+AllowStreamLocalForwarding no
+GatewayPorts no
+PermitTunnel no
+UseDNS no
+LogLevel VERBOSE
+
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
 ```
 
-Suntingan kita tersimpan, benar, dan tidak berpengaruh apa-apa. Hapus berkas itu atau sunting di sana. Bikin drop-in sendiri yang namanya terurut lebih dulu juga bisa.
+Banyak ya, jadi singkatnya:
 
-Daripada menghitung urutan prioritas di kepala, tanya saja ke `sshd` hasil akhirnya:
+- **Port 22022.** Bukan keamanan sungguhan, tapi bot menggempur port 22 seharian dan ini mengurangi bisingnya di log.
+- **Tanpa root, tanpa password, hanya kunci, dan hanya `admin`.** Ini baris-baris yang paling penting. Dengan `AllowUsers`, kalaupun suatu hari ada akun lain di server, akun itu tetap tidak bisa login lewat SSH.
+- **`MaxAuthTries`, `LoginGraceTime`.** Cepat menyerah pada koneksi yang tidak ke mana-mana.
+- **Forwarding.** Semua saya matikan kecuali `AllowTcpForwarding local`, supaya saya masih bisa `ssh -L` untuk menjangkau database di server dari laptop.
+- **`LogLevel VERBOSE`** mencatat fingerprint kunci yang dipakai di setiap login, jadi saya bisa lihat kunci mana yang masuk.
+- **Kripto.** Hanya key exchange, cipher, dan MAC yang modern. Key exchange pertama, `mlkem768x25519-sha256`, tahan komputer kuantum dan baru ada di OpenSSH 10, yang dibawa Debian 13. Host key ECDSA saya buang, Ed25519 dan RSA tetap untuk klien yang lebih tua.
+
+Kalau versi OpenSSH-nya beda, cek dulu apa yang didukung sebelum menyalin baris-baris terakhir itu:
 
 ```bash
-sudo sshd -T | grep -Ei '^(port|passwordauthentication|permitrootlogin|pubkeyauthentication)'
+ssh -Q kex
+```
+
+Sebelum me-restart apa pun, tes berkasnya. Ada salah ketik di sini dan SSH tidak akan kembali:
+
+```bash
+sudo sshd -t
+```
+
+Tidak ada output berarti aman. Lalu tanya `sshd` apa yang benar-benar akan ia pakai, setelah semua berkas include:
+
+```bash
+sudo sshd -T | grep -Ei '^(port|permitrootlogin|passwordauthentication|allowusers) '
 ```
 
 ```output
 port 22022
 permitrootlogin no
-pubkeyauthentication yes
 passwordauthentication no
+allowusers admin
 ```
 
-Itu konfigurasi efektif setelah semua include diproses, dan cuma pembacaan inilah yang saya percaya. `sshd -T` juga menolak mencetak apa pun kalau sintaksnya rusak, jadi kita dapat pemeriksaan gratis sebelum merestart layanan yang sedang kita pakai untuk terhubung.
+Itu config yang efektif, dan cuma itu yang saya percaya. Kalau `passwordauthentication` di sini bilang `yes`, ada berkas lain yang menang.
 
-Restart:
+## Port Harus Diganti di Dua Tempat
+
+Yang ini sempat menjebak saya. Debian 13 bisa menjalankan SSH lewat socket systemd, dan kalau begitu, yang membuka port adalah systemd, bukan `sshd`. Baris `Port` di atas diabaikan. Server saya diatur seperti itu:
+
+```bash
+systemctl is-enabled ssh.socket
+```
+
+```output
+enabled
+```
+
+Kalau hasilnya juga `enabled`, beri tahu socket-nya soal port baru:
+
+```bash
+sudo mkdir -p /etc/systemd/system/ssh.socket.d
+sudo nano /etc/systemd/system/ssh.socket.d/port.conf
+```
+
+```ini
+[Socket]
+ListenStream=
+ListenStream=22022
+```
+
+`ListenStream=` yang kosong itu menghapus port default 22. Tanpanya, ia mendengarkan di dua port.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ssh.socket
+```
+
+Kalau hasilnya `disabled`, `sshd` membuka port sendiri dan cukup di-restart:
 
 ```bash
 sudo systemctl restart ssh
-sudo systemctl status ssh
+```
+
+Yang mana pun, cek apa yang sedang mendengarkan:
+
+```bash
+sudo ss -tlnp | grep 22022
 ```
 
 ```output
-● ssh.service - OpenBSD Secure Shell server
-     Loaded: loaded (/usr/lib/systemd/system/ssh.service; enabled; preset: enabled)
-     Active: active (running) since Wed 2026-05-20 09:41:02 UTC; 4s ago
-   Main PID: 1284 (sshd)
-      Tasks: 1 (limit: 1131)
+LISTEN 0  4096   0.0.0.0:22022  0.0.0.0:*  users:(("systemd",pid=1,fd=52))
+LISTEN 0  4096      [::]:22022     [::]:*  users:(("systemd",pid=1,fd=53))
 ```
 
-`active (running)` cuma berarti layanannya hidup lagi. Apakah perubahannya benar-benar berlaku, itu baru ketahuan dari koneksi sungguhan.
+## Tes Sebelum Menutup Apa Pun
 
-Jadi **sebelum menutup sesi ini**, buka terminal kedua:
+**Jangan tutup sesi yang sedang dipakai.** Buka terminal kedua di laptop dan sambungkan ke port baru:
 
 ```bash
 ssh -p 22022 admin@IP_VPS
 ```
 
-Kalau berhasil, kita mendarat di prompt yang sama. Yang saya dapat waktu itu:
+Kalau jalan, selesai. Kalau tidak, sesi pertama masih terbuka dan bisa dipakai untuk membetulkannya. Kalau sesi itu ditutup dan config barunya rusak, satu-satunya jalan masuk tinggal konsol web dari provider.
 
-```output
-ssh: connect to host IP_VPS port 22022: Connection refused
-```
-
-Membiarkan sesi awal tetap terbuka itu yang menyelamatkan di sini. Kalau konfigurasinya salah, koneksi itu satu-satunya jalan kembali masuk.
-
-Kalau port barunya tidak menjawab, kemungkinan besar masalahnya sama dengan yang saya alami. Debian 13 mengaktifkan SSH lewat socket systemd secara bawaan, jadi direktif `Port` tidak pernah dibaca. [Bagian 2](/blogs/vps-setup-part-2) dibuka dengan itu dan solusinya.
-
-# Membuat Koneksi Lebih Ringkas
-
-Sekarang tiap koneksi butuh port non-standar, username, dan IP yang tidak saya hafal:
+Dan untuk memastikan root benar-benar terkunci:
 
 ```bash
-ssh -p 22022 admin@IP_VPS
+ssh -p 22022 root@IP_VPS
 ```
 
-Itu bukan masalah keamanan, tapi jenis gesekan yang bikin kita mulai menyalin perintah dari riwayat shell tanpa membacanya. Ini juga merepotkan alat yang mengharapkan hostname biasa. `scp`, `rsync`, dan ekstensi remote di editor sama-sama minta port dan user dilewatkan terpisah, dengan sintaks masing-masing yang sedikit berbeda.
+```output
+root@IP_VPS: Permission denied (publickey).
+```
 
-SSH punya berkas konfigurasi sisi klien untuk ini. Berkasnya ada di **mesin lokal**; server tidak tahu dan tidak peduli:
+# Membuat Koneksi Lebih Pendek
+
+Mengetik `ssh -p 22022 admin@IP_VPS` setiap kali cepat bikin bosan. SSH punya berkas config di sisi laptop untuk ini:
 
 ```bash
 nano ~/.ssh/config
@@ -394,61 +386,17 @@ Host vps
 	IdentitiesOnly yes
 ```
 
-Permission-nya penting untuk alasan yang sama seperti pada `authorized_keys`:
-
 ```bash
 chmod 600 ~/.ssh/config
-```
-
-Sekarang cukup:
-
-```bash
 ssh vps
 ```
 
-```output
-Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-Last login: Wed May 20 10:02:11 2026 from 203.0.113.41
-admin@vps:~$
-```
+`IdentitiesOnly yes` bikin SSH hanya menawarkan satu kunci itu. Tanpanya, ia mencoba semua kunci di agent, dan dengan `MaxAuthTries 3` di server, kita bisa ditolak sebelum sampai ke kunci yang benar.
 
-`Host vps` cuma label. Semua opsi di bawahnya berlaku setiap kali label itu jadi tujuan, jadi port dan username berhenti jadi hal yang harus diingat dan jadi bagian dari arti `vps` itu sendiri.
-
-Yang tidak saya duga adalah seberapa jauh ini berlaku di luar perintah `ssh`. Apa pun yang bicara SSH membaca berkas yang sama:
-
-```bash
-scp backup.tar.gz vps:~/
-rsync -avz ./dist/ vps:~/apps/site/
-```
-
-Editor juga. Mengarahkan Remote-SSH di VS Code ke `vps` sudah cukup, tanpa kolom port, kolom user, atau path kunci.
-
-`IdentitiesOnly yes` layak dipahami, jangan cuma disalin. Tanpanya, SSH menawarkan semua kunci di agent satu per satu sampai ada yang diterima. Kalau kunci yang termuat lebih dari beberapa, server bisa kena batas `MaxAuthTries` dan menolak kita sebelum sampai ke kunci yang benar. Galatnya "too many authentication failures", yang persis mirip setup kunci yang rusak. Baris ini menyuruh SSH cuma menawarkan kunci di baris `IdentityFile`.
-
-Host bisa terus ditambah, dan tiap entri berdiri sendiri:
-
-```text
-Host vps
-	HostName IP_VPS
-	User admin
-	Port 22022
-	IdentityFile ~/.ssh/id_ed25519
-	IdentitiesOnly yes
-
-Host vps-root
-	HostName IP_VPS
-	User root
-	Port 22022
-	IdentityFile ~/.ssh/id_ed25519
-	IdentitiesOnly yes
-```
-
-Entri kedua itu tentu tidak jalan lagi, karena `PermitRootLogin no` sedang bekerja sebagaimana mestinya. Yang mana cara masuk akal untuk memastikan hardening-nya berlaku.
+Enaknya, semua yang lain yang pakai SSH juga membaca berkas ini. `scp file vps:~/` dan `rsync ./dist/ vps:~/site/` langsung jalan, begitu juga Remote-SSH di VS Code.
 
 # Bagian Selanjutnya
 
-Server sudah tidak dalam kondisi instalasi baru. Root dan pengguna biasa terpisah, SSH mewajibkan kunci, dan pintu masuk yang jelas sudah ditutup.
+Sejauh ini: sistem sudah di-update, ada satu pengguna dengan kunci dan `sudo`, root tidak bisa login, dan SSH hanya menerima kunci pengguna itu di port yang tidak standar.
 
-Tapi itu baru lapisan login. Semua port lain di mesin ini masih terbuka, tidak ada yang mengawasi kegagalan berulang, dan pembaruan keamanan cuma terjadi kalau saya ingat menjalankannya.
-
-[Bagian 2](/blogs/vps-setup-part-2) melanjutkan dari sini dengan aturan firewall, fail2ban, dan patching otomatis, lalu seri ini berjalan terus ke [Podman rootless](/blogs/vps-setup-part-3), [Caddy dan HTTPS](/blogs/vps-setup-part-4), dan [men-deploy aplikasi sungguhan](/blogs/vps-setup-part-5).
+Itu baru urusan login. Port lain masih terbuka, tidak ada yang mengawasi kegagalan berulang, dan update cuma terjadi kalau saya ingat. [Bagian 2](/id/blogs/vps-setup-2) membereskan itu: firewall, fail2ban, update otomatis, dan sedikit tuning.

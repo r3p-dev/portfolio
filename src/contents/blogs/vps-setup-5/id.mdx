@@ -1,0 +1,254 @@
+---
+title: 'Cara Menyiapkan VPS untuk Pemula, dari Seorang Pemula (Bagian 5: Deploy, dan Satu Skrip untuk Semuanya)'
+description: Bagian 5 dari penyiapan VPS pertama saya di Debian 13. Deploy dari GitHub di setiap push, dengan kunci deploy yang cuma bisa satu hal, health check dan rollback otomatis, serta vps-setup.sh, skrip yang menyiapkan seluruh seri ini dengan satu perintah.
+date: '2026-05-24'
+tags: [vps, debian, podman, quadlet, traefik, deployment, github-actions, automation]
+---
+
+> **Seri 5 bagian.**
+>
+> - [Bagian 1: Mengamankan Sistem Dasar](/id/blogs/vps-setup-1)
+> - [Bagian 2: Firewall, Ban & Update](/id/blogs/vps-setup-2)
+> - [Bagian 3: Podman Rootless](/id/blogs/vps-setup-3)
+> - [Bagian 4: Traefik & HTTPS](/id/blogs/vps-setup-4)
+> - **Bagian 5: Deploy, dan Satu Skrip untuk Semuanya**
+
+# Sampai Mana Kita
+
+Setelah [Bagian 4](/id/blogs/vps-setup-4), kontainer dengan label yang tepat dapat domain dan HTTPS. Yang belum ada adalah cara aplikasi saya sampai ke sana.
+
+Yang saya mau: saya push ke `main`, GitHub membangun image-nya, server menjalankannya, dan kalau versi barunya rusak, versi lama tetap jalan. Saya tidak mau SSH lalu menyalin berkas ke sana kemari.
+
+Bagian 1 sampai 4 itu hal yang saya ketik sekali. Deploy terjadi di setiap push, jadi butuh program di server yang mengerjakannya dengan cara yang sama setiap kali. Program itu saya tulis sebagai skrip shell. Karena toh sudah ada skrip di server, semua dari Bagian 1 sampai 4 sekalian saya masukkan ke sana. Itulah [`vps-setup.sh`](https://github.com/r3p-dev/dotfiles/blob/main/vps-setup.sh), dan situs ini di-deploy dengannya.
+
+# Cara Kerja Deploy
+
+```text
+git push ke main
+  ↓
+GitHub Actions membangun image dan mendorongnya ke GHCR
+  ↓
+ia tersambung ke server dengan kunci yang cuma bisa men-deploy aplikasi ini
+  ↓
+server mengecek compose.yaml milik repo dan mengubahnya jadi unit Quadlet
+  ↓
+hanya layanan yang berubah yang di-restart, lalu ia menunggu sampai sehat
+  ↓
+live, atau di-rollback ke versi sebelumnya
+```
+
+GHCR adalah container registry milik GitHub. Image-nya tinggal di sebelah kode, dan workflow bisa mendorong ke sana tanpa akun tambahan.
+
+# Mendapatkan Skripnya
+
+Skripnya ada di [repositori dotfiles](https://github.com/r3p-dev/dotfiles) saya, di sebelah setup desktop. Di server Debian 13 yang masih baru, sebagai root:
+
+```bash
+apt install -y curl
+curl -fsSLO https://dotfiles.r3p.dev/vps-setup.sh
+less vps-setup.sh
+```
+
+Unduh dan baca dulu sebelum menjalankannya, jangan langsung `curl` ke `bash`. Skrip ini menulis ulang config SSH di server yang sedang kita pakai, jadi ada baiknya tahu isinya. (Ia juga menolak dijalankan dari pipe, karena setelahnya ia memasang salinan dirinya sebagai perintah.)
+
+Panjangnya sekitar 2.600 baris, tapi isinya satu fungsi per langkah, dengan urutan yang sama seperti seri ini. Membaca bagian yang kita pedulikan saja sudah cukup.
+
+# Berkas Config
+
+Semua pengaturan ada di satu berkas. Skripnya bisa mencetak contoh yang sudah diberi komentar:
+
+```bash
+bash vps-setup.sh config-example > vps.conf
+nano vps.conf
+```
+
+Empat nilai wajib diisi. Sisanya punya default yang masuk akal:
+
+```text
+USER_NAME="admin"                  # satu-satunya login: SSH, sudo, dan pemilik semua aplikasi
+SSH_PUBLIC_KEY="ssh-ed25519 AAAA… you@laptop"
+ACME_EMAIL="you@example.org"       # untuk Let's Encrypt
+GITHUB_OWNER="your-github-name"    # CI hanya boleh men-deploy ghcr.io/<owner>/*
+
+SSH_PORT="22022"
+TIMEZONE="Asia/Jakarta"
+```
+
+`SSH_PUBLIC_KEY` adalah baris `.pub` dari [Bagian 1](/id/blogs/vps-setup-1#kunci-ssh). Kalau dikosongkan, skripnya mencoba kunci di `github.com/<GITHUB_KEYS_USER>.keys`, lalu kunci yang sudah ada di `authorized_keys` milik root. Kalau tidak menemukan satu kunci pun, ia berhenti. Ia tidak akan mematikan login password di server yang setelah itu tidak bisa kita masuki.
+
+Berkasnya dibaca sebagai baris `KEY="value"` biasa, tidak pernah dijalankan sebagai kode shell, dan salah ketik di nama kunci menghasilkan peringatan.
+
+# Menjalankannya
+
+```bash
+sudo bash vps-setup.sh init --config vps.conf
+```
+
+Ia menampilkan rencananya dulu dan bertanya sebelum menyentuh apa pun:
+
+```output
+==> Plan
+    user          admin — the only login: SSH key, sudo, owns every container
+    ssh           port 22022, keys only (passwords and root login disabled)
+    https         Traefik (docker.io/library/traefik:v3.7), Let's Encrypt <you@example.org>
+    deploys       from ghcr.io/your-github-name/* (GitHub Actions)
+
+  ! After this, SSH accepts ONLY 'admin' with the key(s) listed above.
+  ! Keep this session open until 'ssh admin@203.0.113.10' works from a NEW terminal.
+Proceed? [y/N]
+```
+
+Peringatan itu sama dengan saran di Bagian 1: biarkan sesi tetap terbuka sampai login baru berhasil. Lalu ia mengerjakan setiap langkah dan mengecek hasilnya:
+
+```output
+==> Base system
+  ✓ packages installed and up to date
+  ✓ time, journald and core dumps configured
+
+==> User admin
+  ✓ SSH keys, sudo, lingering user services, cgroup delegation
+
+==> Memory
+  ✓ zram swap: 50% of 1967 MiB RAM, zstd
+...
+==> Firewall (nftables)
+  ✓ inbound: default deny — open: ssh/22022, 80, 443 (tcp+udp)
+
+==> SSH
+  ✓ keys only, no root login, only admin may log in, port 22022
+```
+
+Di akhir, ia mencetak perintah `ssh` persis untuk dites dari terminal baru, fingerprint server, dan record DNS yang perlu dibuat.
+
+Menjalankannya lagi aman. Sebuah berkas hanya ditulis ulang kalau isinya berubah, dan layanan hanya di-restart kalau config-nya berubah. Kalau mau mengubah sesuatu, saya edit `/etc/vps/vps.conf` (skripnya menyimpan config di sana) lalu jalankan `sudo vps init` lagi.
+
+## Apa yang Dikerjakannya
+
+Isinya Bagian 1 sampai 4, dengan urutan yang sama:
+
+| Bagian                     | Yang disiapkan skrip                                                                                     |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [1](/id/blogs/vps-setup-1) | Update, package dasar, hostname, zona waktu, NTP                                                         |
+| [1](/id/blogs/vps-setup-1) | Satu pengguna dengan `sudo`, kunci kita (kunci RSA lemah dilewati), password `sudo` yang kita pilih      |
+| [1](/id/blogs/vps-setup-1) | `00-vps-hardening.conf` untuk SSH, port di `ssh.socket`, dicek dengan `sshd -t` dan `sshd -T`            |
+| [2](/id/blogs/vps-setup-2) | Firewall nftables, fail2ban dengan `recidive`, unattended upgrades dengan reboot jam 4 pagi, needrestart |
+| [2](/id/blogs/vps-setup-2) | zram, pengaturan kernel dan BBR, batas journal, tanpa core dump                                          |
+| [3](/id/blogs/vps-setup-3) | Podman, subuid, delegasi cgroup, lingering, `containers.conf`, batas port, timer pembersih image         |
+| [4](/id/blogs/vps-setup-4) | Traefik dengan kedua unit socket-nya, config statis dan dinamis, jaringan `web`, auto-update harian      |
+
+Nama berkasnya mengandung `vps` (`90-vps.conf` dan seterusnya), jadi gampang melihat berkas mana yang ditulis skrip.
+
+# Men-deploy Aplikasi
+
+Setelah `init`, skripnya terpasang sebagai perintah `vps`. Semuanya dari sini dijalankan sebagai `admin`, tanpa `sudo`. Menyiapkan satu repo cukup tiga perintah di server:
+
+```bash
+vps ci-key myapp                    # kunci deploy, dicetak sebagai 5 secret GitHub
+vps workflow myapp --after CI       # workflow GitHub Actions
+vps compose-example                 # compose.yaml sebagai titik awal
+```
+
+## Kunci Deploy
+
+`vps ci-key` membuat kunci SSH baru khusus untuk aplikasi ini dan menambahkannya ke `authorized_keys` seperti ini:
+
+```text
+restrict,command="/usr/local/bin/vps deploy-hook --app myapp" ssh-ed25519 AAAA… vps-ci:myapp
+```
+
+`command=` berarti apa pun yang diminta GitHub Actions untuk dijalankan, server menjalankan `vps deploy-hook` untuk `myapp`. `restrict` mematikan shell, port forwarding, dan semua yang lain. Kalau kunci itu sampai bocor, paling jauh orang bisa men-deploy ulang aplikasi ini saja, dengan image dari akun GHCR saya sendiri. Menjalankan `vps ci-key myapp` lagi akan mengganti kuncinya.
+
+Ia mencetak lima nilai untuk ditempel ke secret repo: host, port, user, kunci privat, dan host key server. Dengan host key itu, workflow bisa menolak tersambung ke apa pun yang berpura-pura jadi server saya.
+
+Workflow-nya juga ikut mengirim `GITHUB_TOKEN` miliknya yang berumur pendek, supaya server bisa menarik image-nya walaupun package-nya privat. Server memakainya sekali, menyimpannya di memori saja, dan menghapusnya begitu deploy selesai.
+
+## Workflow-nya
+
+`vps workflow myapp` mencetak berkas GitHub Actions yang siap pakai. Simpan sebagai `.github/workflows/cd.yml`. Isinya dua job: membangun image dan mendorongnya ke GHCR, lalu mengirim nama image dan `compose.yaml` milik repo ke server lewat SSH.
+
+Dengan `--after CI`, ia hanya jalan setelah workflow `CI` yang sudah ada (tes, lint) lolos di `main`, dan ia men-deploy persis commit yang dites. [`cd.yml`](https://github.com/r3p-dev/portfolio/blob/main/.github/workflows/cd.yml) milik situs ini salah satunya.
+
+## Berkas Compose
+
+Apa yang dijalankan dideskripsikan di `compose.yaml` biasa di dalam repo. Ini milik situs ini:
+
+```yaml
+services:
+  web:
+    image: ${IMAGE}
+    labels:
+      vps.domain: r3p.dev
+      vps.redirect: www.r3p.dev
+      vps.port: '4321'
+    cap_drop: [ALL]
+    healthcheck:
+      test: ['CMD', 'bun', 'healthcheck.ts']
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+```
+
+- `image: ${IMAGE}` diganti dengan image persis yang baru dibangun workflow, dikunci dengan digest-nya. Tag bisa dipindah nanti; digest tidak.
+- `vps.domain` dan `vps.port` berubah jadi label Traefik dari Bagian 4. Saya tidak menulisnya manual lagi.
+- `vps.redirect` mengarahkan `www` ke domain utama dengan 301.
+- Health check-nya yang memberi tahu server apakah versi baru benar-benar jalan.
+
+Karena berkas ini datang dari CI, server ketat soal apa yang diterimanya:
+
+- Tanpa `ports`. Semuanya lewat Traefik.
+- Tanpa bind mount, `privileged`, jaringan host, atau device. Hanya named volume, dan hanya daftar capability yang pendek.
+- Image hanya dari akun GHCR saya sendiri dan image resmi Docker.
+- Tidak ada secret di berkas. Setiap aplikasi dapat satu berkas `.env` di server, diisi dengan `vps env myapp DB_PASSWORD=…`.
+
+Selain itu ditolak sebelum satu kontainer pun menyala, dengan pesan yang menyebut layanannya dan masalahnya.
+
+Lalu [Podlet](https://github.com/containers/podlet) mengubah berkas compose jadi unit Quadlet, jenis berkas `.container` yang sama dengan di [Bagian 3](/id/blogs/vps-setup-3#quadlet-kontainer-sebagai-layanan-systemd). Skripnya menambahkan jaringan privat untuk aplikasi itu, batas memori, CPU, dan proses, `NoNewPrivileges`, serta label Traefik. Ia juga mengecek hasil Podlet dan menolak pengaturan apa pun yang tidak ada di daftar pendek yang diizinkan. Podlet sendiri diunduh di versi yang tetap dan dicocokkan dengan checksum.
+
+## Health Check dan Rollback
+
+Setiap deploy disimpan sebagai rilis di `~/apps/myapp/releases/`, dan link `current` menunjuk ke yang sedang live.
+
+Hanya layanan yang unit-nya benar-benar berubah yang di-restart. Kalau sebuah layanan punya health check, systemd menunggu sampai ia melapor sehat sebelum start-nya dianggap selesai. Jadi aplikasi yang bergantung pada database menunggu sampai database-nya sehat, bukan sekadar menyala. Lalu skripnya menunggu beberapa detik lagi dan mengecek semuanya masih jalan.
+
+Kalau ada yang tidak, ia kembali ke rilis sebelumnya, dan run di GitHub gagal:
+
+```output
+  ! myapp-web is not running (failed failed)
+  ! rolling back to the previous release
+error: deploy failed — the previous release is running again (logs: vps logs myapp)
+```
+
+Push yang rusak membiarkan versi lama tetap online, dan saya tahunya dari GitHub, bukan dari orang yang membuka situsnya.
+
+# Sehari-hari
+
+Saya kebanyakan cuma pakai empat perintah:
+
+```bash
+vps status          # server, lalu semua aplikasi
+vps logs myapp -f   # log dari semua layanan satu aplikasi
+vps rollback myapp  # kembali ke rilis sebelumnya
+vps env myapp       # edit secret, lalu restart untuk menerapkan
+```
+
+```output
+APP                  STATE        RELEASE                    DOMAINS
+portfolio            running      20261014T161203.482913377  r3p.dev,www.r3p.dev
+```
+
+`vps help` menampilkan sisanya.
+
+# Yang Tidak Dikerjakannya
+
+- **Backup.** Semuanya ada di direktori home satu pengguna, jadi backup gampang disiapkan, tapi skripnya tidak menyiapkannya.
+- **Lebih dari satu server.** Ia mengurus satu mesin. Tanpa replika, tanpa load balancing antar server.
+- **Distribusi lain.** Debian 13 atau lebih baru, di x86_64 atau arm64. Ia mengecek dulu dan berhenti kalau tidak cocok.
+
+# Penutup
+
+Saya senang mengerjakan Bagian 1 sampai 4 manual lebih dulu. Saya tidak akan percaya skrip yang menulis ulang config SSH saya kalau saya tidak tahu kenapa `00-` di nama berkas itu penting, atau kenapa firewall-nya di-reload, bukan di-restart.
+
+Sekarang server tempat situs ini berjalan disiapkan dengan satu perintah, dan deploy cukup dengan `git push`.
+
+Skripnya ada di [dotfiles saya](https://github.com/r3p-dev/dotfiles/blob/main/vps-setup.sh), dan berkas deploy untuk situs ini ada di [repositorinya](https://github.com/r3p-dev/portfolio) kalau mau contoh yang sudah jalan untuk ditiru.

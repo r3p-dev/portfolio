@@ -1,0 +1,412 @@
+---
+title: 'Cara Menyiapkan VPS untuk Pemula, dari Seorang Pemula (Bagian 4: Traefik dan HTTPS)'
+description: Bagian 4 dari penyiapan VPS pertama saya di Debian 13. Traefik sebagai reverse proxy rootless, dengan port yang diserahkan systemd, sertifikat Let's Encrypt otomatis, HTTP/3, security header, dan rute yang berasal dari label kontainer.
+date: '2026-05-23'
+tags: [vps, debian, podman, quadlet, traefik, https]
+---
+
+> **Seri 5 bagian.**
+>
+> - [Bagian 1: Mengamankan Sistem Dasar](/id/blogs/vps-setup-1)
+> - [Bagian 2: Firewall, Ban & Update](/id/blogs/vps-setup-2)
+> - [Bagian 3: Podman Rootless](/id/blogs/vps-setup-3)
+> - **Bagian 4: Traefik & HTTPS**
+> - [Bagian 5: Deploy, dan Satu Skrip untuk Semuanya](/id/blogs/vps-setup-5)
+
+# Sampai Mana Kita
+
+Setelah [Bagian 3](/id/blogs/vps-setup-3), server bisa menjalankan kontainer yang bertahan setelah reboot. Tapi belum ada yang bisa menjangkaunya dari luar, dan belum ada HTTPS.
+
+Itu tugas reverse proxy. Ia satu-satunya yang mendengarkan di port 80 dan 443. Ia mengambil sertifikat dari Let's Encrypt, dan meneruskan setiap request ke kontainer yang tepat berdasarkan domainnya.
+
+# Kenapa Traefik
+
+Saya pilih Traefik karena ia bisa menemukan aplikasi sendiri. Ia memantau Podman, dan begitu ada kontainer yang menyala dengan beberapa label yang bilang "saya `app.example.com`, saya mendengarkan di port 3000", Traefik menambahkan rutenya dan mengambil sertifikat untuknya. Begitu kontainernya berhenti, rutenya hilang.
+
+Itu penting untuk Bagian 5, di mana aplikasi di-deploy di setiap `git push`. Saya tidak mau mengedit berkas config proxy manual setiap kali ada aplikasi baru.
+
+# Membuat Traefik Bisa Melihat Kontainer
+
+Traefik mengenal kontainer lewat Docker API. Podman bisa melayani API yang sama, dari socket milik pengguna saya:
+
+```bash
+systemctl --user enable --now podman.socket
+ls $XDG_RUNTIME_DIR/podman/podman.sock
+```
+
+```output
+/run/user/1000/podman/podman.sock
+```
+
+Perlu diingat, siapa pun yang bisa bicara ke socket ini bisa mengendalikan semua kontainer saya. Traefik butuh socket itu, jadi di bawah nanti kontainer Traefik sendiri saya kunci serapat mungkin.
+
+# Jaringan untuk Aplikasi Publik
+
+Traefik dan aplikasi yang dilayaninya butuh jaringan bersama. Quadlet juga bisa membuat jaringan:
+
+```bash
+nano ~/.config/containers/systemd/web.network
+```
+
+```ini
+[Network]
+NetworkName=web
+```
+
+Hanya kontainer yang memang publik yang masuk ke `web`. Database tidak pernah, jadi Traefik tidak bisa menjangkaunya walaupun tidak sengaja.
+
+Sertifikat harus bertahan melewati restart, jadi ia dapat named volume:
+
+```bash
+nano ~/.config/containers/systemd/traefik-acme.volume
+```
+
+```ini
+[Volume]
+VolumeName=traefik-acme
+```
+
+# Config Traefik
+
+Traefik punya dua jenis config. Yang statis dibaca sekali saat start: port, tempat mencari kontainer, cara mengambil sertifikat.
+
+```bash
+mkdir -p ~/.config/traefik/dynamic
+nano ~/.config/traefik/traefik.yml
+```
+
+```yaml
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: WARN
+  format: json
+
+entryPoints:
+  web:
+    address: ':80'
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+      aliasHeadersStrategy: delete
+      encodedCharacters:
+        allowEncodedBackSlash: false
+        allowEncodedNullCharacter: false
+  websecure:
+    address: ':443'
+    http3: {}
+    http:
+      tls:
+        certResolver: le
+      middlewares:
+        - secure@file
+      aliasHeadersStrategy: delete
+      encodedCharacters:
+        allowEncodedBackSlash: false
+        allowEncodedNullCharacter: false
+
+providers:
+  docker:
+    endpoint: 'unix:///var/run/docker.sock'
+    exposedByDefault: false
+    network: web
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  le:
+    acme:
+      email: 'you@example.org'
+      storage: /acme/acme.json
+      httpChallenge:
+        entryPoint: web
+
+api:
+  dashboard: false
+```
+
+Bagian pentingnya:
+
+- **Dua entry point.** `web` di port 80 cuma mengalihkan ke HTTPS (dan menjawab pengecekan Let's Encrypt). `websecure` di 443 tempat semuanya dilayani, dengan HTTP/3 menyala.
+- **Setiap rute HTTPS memakai middleware `secure`**, yang didefinisikan di bawah. Aplikasi baru tidak bisa lupa security header-nya karena ia memang tidak perlu menambahkannya.
+- **`exposedByDefault: false`.** Kontainer hanya dapat rute kalau ia memintanya dengan `traefik.enable=true`.
+- **`le`** adalah setup Let's Encrypt. Isi dengan e-mail asli; Let's Encrypt memakainya untuk memperingatkan sertifikat yang hampir kedaluwarsa.
+- **`aliasHeadersStrategy` dan `encodedCharacters`** membuang beberapa trik dengan header aneh dan karakter ter-encode di URL yang bisa membingungkan aplikasi di belakang proxy.
+- **Tanpa dashboard.** Saya tidak butuh, dan itu satu hal yang tidak perlu terbuka.
+
+Selama masih mencoba-coba, tambahkan `caServer: 'https://acme-staging-v02.api.letsencrypt.org/directory'` di bawah `acme`. Let's Encrypt punya rate limit, dan beberapa percobaan gagal berturut-turut bisa bikin kita diblokir sementara. Server staging memberi sertifikat palsu tanpa batas. Hapus barisnya begitu semuanya jalan.
+
+Config dinamis adalah jenis yang satunya. Traefik memuatnya ulang setiap kali berkasnya berubah:
+
+```bash
+nano ~/.config/traefik/dynamic/00-defaults.yml
+```
+
+```yaml
+http:
+  middlewares:
+    secure:
+      chain:
+        middlewares:
+          - security-headers
+          - rate-limit
+          - compress
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        customFrameOptionsValue: SAMEORIGIN
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: 'camera=(), microphone=(), geolocation=(), payment=()'
+        customResponseHeaders:
+          Server: ''
+          X-Powered-By: ''
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+    compress:
+      compress:
+        minResponseBodyBytes: 1024
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+```
+
+`secure` itu tiga middleware yang dirangkai:
+
+- **Security header.** HSTS menyuruh browser selalu memakai HTTPS untuk domain ini. Yang lain mencegah MIME sniffing dan framing oleh situs lain, membatasi apa yang bocor lewat referrer, dan mematikan akses kamera, mikrofon, dan lokasi. `Server` dan `X-Powered-By` dihapus supaya response tidak mengumumkan apa yang sedang berjalan.
+- **Rate limit.** 100 request per detik per IP klien, dengan lonjakan sampai 200. Lebih dari cukup untuk manusia, dan memperlambat apa pun yang menggempur server.
+- **Kompresi** untuk response di atas 1 KB.
+
+Bagian `tls` mengizinkan TLS 1.2 ke atas dengan cipher modern saja. `sniStrict` menolak koneksi yang tidak menyebut salah satu domain saya, jadi orang yang memindai IP-nya langsung tidak dapat apa-apa.
+
+# Membiarkan systemd yang Membuka Port
+
+Bagian ini yang paling lama saya kerjakan. Saya mau Traefik melihat IP asli setiap pengunjung, karena rate limit dan log bergantung padanya.
+
+Jadi Traefik tidak membuka port 80 dan 443 sama sekali. Yang membukanya systemd milik pengguna saya (diizinkan sejak perubahan `ip_unprivileged_port_start` di Bagian 3), lalu socket yang sudah terbuka itu diserahkan ke Traefik saat ia menyala. Koneksi langsung sampai ke Traefik, tanpa ada yang di tengah yang mengubah asal-usulnya. Traefik mendukung ini langsung: ia mencocokkan setiap socket dengan entry point berdasarkan namanya.
+
+```bash
+nano ~/.config/systemd/user/traefik-http.socket
+```
+
+```ini
+[Unit]
+Description=Traefik :80 (HTTP → HTTPS redirect, ACME challenges)
+
+[Socket]
+ListenStream=80
+FileDescriptorName=web
+Service=traefik.service
+
+[Install]
+WantedBy=sockets.target
+```
+
+```bash
+nano ~/.config/systemd/user/traefik-https.socket
+```
+
+```ini
+[Unit]
+Description=Traefik :443 (HTTPS over TCP, HTTP/3 over UDP)
+
+[Socket]
+ListenStream=443
+ListenDatagram=443
+FileDescriptorName=websecure
+Service=traefik.service
+
+[Install]
+WantedBy=sockets.target
+```
+
+`FileDescriptorName` harus sama dengan nama entry point di `traefik.yml`, yaitu `web` dan `websecure`. `ListenDatagram=443` adalah socket UDP untuk HTTP/3.
+
+# Kontainer Traefik
+
+```bash
+nano ~/.config/containers/systemd/traefik.container
+```
+
+```ini
+[Unit]
+Description=Traefik reverse proxy (socket-activated)
+Requires=traefik-http.socket traefik-https.socket podman.socket
+After=traefik-http.socket traefik-https.socket podman.socket
+
+[Container]
+Image=docker.io/library/traefik:v3.7
+ContainerName=traefik
+Network=web.network
+Notify=true
+AutoUpdate=registry
+NoNewPrivileges=true
+ReadOnly=true
+DropCapability=ALL
+PidsLimit=256
+PodmanArgs=--memory=256m
+Volume=%t/podman/podman.sock:/var/run/docker.sock
+Volume=%h/.config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+Volume=%h/.config/traefik/dynamic:/etc/traefik/dynamic:ro
+Volume=traefik-acme.volume:/acme
+
+[Service]
+Sockets=traefik-http.socket traefik-https.socket
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
+```
+
+Satu per satu:
+
+- `Sockets=` adalah tempat systemd menyerahkan dua socket tadi.
+- Socket Podman di-mount di tempat Traefik mengharapkan socket Docker. `%t` adalah direktori runtime pengguna saya dan `%h` direktori home saya.
+- Berkas config di-mount read-only.
+- `ReadOnly`, `DropCapability=ALL`, `NoNewPrivileges`, serta batas memori dan proses mengunci kontainernya. Karena ia bisa menjangkau socket Podman, saya mau ia sekotak mungkin.
+- `Notify=true` bikin systemd menunggu sampai Traefik bilang siap sebelum start-nya dianggap selesai.
+- `AutoUpdate=registry` bersama `traefik:v3.7` berarti Podman mengecek setiap hari apakah ada image `v3.7` yang lebih baru, yaitu rilis patch, lalu me-restart Traefik dengannya. Lompatan ke 3.8 tetap keputusan saya.
+
+Nyalakan pengecekan update hariannya:
+
+```bash
+systemctl --user enable --now podman-auto-update.timer
+```
+
+# Menjalankannya
+
+Pastikan tidak ada program lain yang memakai port-nya. Beberapa image provider datang dengan Apache atau nginx yang sudah jalan:
+
+```bash
+sudo ss -ltnup '( sport = :80 or sport = :443 )'
+```
+
+Seharusnya tidak ada yang tercetak selain header. Lalu cek berkas Quadlet, muat semuanya, dan jalankan:
+
+```bash
+/usr/libexec/podman/quadlet -dryrun -user > /dev/null
+systemctl --user daemon-reload
+systemctl --user enable --now traefik-http.socket traefik-https.socket
+podman pull docker.io/library/traefik:v3.7
+systemctl --user start traefik
+systemctl --user status traefik
+```
+
+```output
+● traefik.service - Traefik reverse proxy (socket-activated)
+     Loaded: loaded (/home/admin/.config/containers/systemd/traefik.container; generated)
+     Active: active (running) since Tue 2026-10-14 10:12:40 WIB; 3s ago
+TriggeredBy: ● traefik-https.socket
+             ● traefik-http.socket
+```
+
+Image-nya saya tarik dulu supaya start pertama tidak diam lama karena mengunduh. Kalau gagal, log-nya bilang kenapa:
+
+```bash
+journalctl --user -u traefik -n 30
+```
+
+# DNS
+
+Sebelum Let's Encrypt bisa mengeluarkan sertifikat, domainnya harus mengarah ke server. Di penyedia DNS, tambahkan record A untuk domainnya dengan IP server. Saya juga menambahkan wildcard (`*.example.com`), supaya subdomain baru apa pun yang saya buat nanti langsung jalan tanpa harus ke pengaturan DNS lagi.
+
+Kalau server punya IPv6, tambahkan record AAAA juga.
+
+# Tes dengan Domain Sungguhan
+
+Kontainer `whoami` yang sama dari Bagian 3, sekarang dengan label, bukan port yang dipublikasikan:
+
+```bash
+nano ~/.config/containers/systemd/whoami.container
+```
+
+```ini
+[Container]
+ContainerName=whoami
+Image=docker.io/traefik/whoami
+Network=web.network
+Label=traefik.enable=true
+Label=traefik.http.routers.whoami.rule=Host(`whoami.example.com`)
+Label=traefik.http.routers.whoami.entrypoints=websecure
+Label=traefik.http.routers.whoami.tls.certresolver=le
+Label=traefik.http.services.whoami.loadbalancer.server.port=80
+
+[Install]
+WantedBy=default.target
+```
+
+Label-label itu adalah seluruh config proxy untuk aplikasi ini: domain yang mana, entry point yang mana, ambil sertifikat dari `le`, dan kirim lalu lintas ke port 80 di dalam kontainer.
+
+```bash
+systemctl --user daemon-reload
+systemctl --user start whoami
+```
+
+Beri beberapa detik untuk mengambil sertifikat, lalu dari laptop:
+
+```bash
+curl -I https://whoami.example.com
+```
+
+```output
+HTTP/2 200
+alt-svc: h3=":443"; ma=2592000
+content-type: text/plain; charset=utf-8
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: SAMEORIGIN
+```
+
+Itu sertifikat yang valid, semua security header dari middleware `secure`, dan `alt-svc` yang memberi tahu browser bahwa HTTP/3 tersedia. `http://whoami.example.com` dialihkan ke HTTPS.
+
+Lalu cek IP aslinya. Tanpa `-I`, whoami mencetak request yang ia terima:
+
+```bash
+curl -s https://whoami.example.com | grep X-Real-Ip
+```
+
+```output
+X-Real-Ip: 203.0.113.41
+```
+
+Itu alamat publik laptop saya, bukan alamat internal kontainer. Penyerahan socket-nya jalan.
+
+Kalau sertifikatnya tidak kunjung datang, hampir selalu karena DNS belum mengarah ke server, atau port 80 terblokir. Let's Encrypt mengecek lewat HTTP biasa di port 80. `journalctl --user -u traefik` menunjukkan error persisnya.
+
+Bersihkan tesnya:
+
+```bash
+systemctl --user stop whoami
+rm ~/.config/containers/systemd/whoami.container
+systemctl --user daemon-reload
+```
+
+# Posisi Server Sekarang
+
+Traefik memegang port 80 dan 443 lewat systemd dan melihat IP klien yang asli. Sertifikat otomatis, HTTP/3 menyala, setiap situs dapat security header dan rate limit yang sama, dan aplikasi baru cuma butuh beberapa label untuk online. Update patch Traefik terpasang sendiri.
+
+Yang tersisa adalah memasukkan aplikasi saya sendiri ke server tanpa harus SSH dan menyalin berkas ke sana kemari. Itu [Bagian 5](/id/blogs/vps-setup-5): deploy dari GitHub di setiap push, dan skrip yang mengerjakan kelima bagian ini sekaligus.

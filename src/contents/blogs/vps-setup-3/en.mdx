@@ -1,68 +1,54 @@
 ---
 title: 'How to Set Up a VPS for Beginners, from a Beginner (Part 3: Rootless Podman and the First Container)'
-description: Part 3 of setting up my first VPS on Debian 13 Minimal. Getting rootless Podman working properly - the packages Debian Minimal leaves out, UID mapping, lingering, privileged ports, and running a first container as a systemd Quadlet service.
+description: Part 3 of setting up my first VPS on Debian 13. Rootless Podman owned by one user, UID mapping, cgroup delegation, lingering, and running a first container as a systemd service with Quadlet.
 date: '2026-05-22'
+updated: '2026-10-15'
 tags: [vps, debian, podman, quadlet, systemd, containers]
 ---
 
 > **A 5-part series.**
 >
-> · [Part 1 — Securing the Base System](/blogs/vps-setup-part-1)
->
-> · [Part 2 — Firewall & Bans](/blogs/vps-setup-part-2)
->
-> · **Part 3 — Rootless Podman**
->
-> · [Part 4 — Caddy & HTTPS](/blogs/vps-setup-part-4)
->
-> · [Part 5 — Deploying Your App](/blogs/vps-setup-part-5)
+> - [Part 1: Securing the Base System](/blogs/vps-setup-1)
+> - [Part 2: Firewall, Bans & Updates](/blogs/vps-setup-2)
+> - **Part 3: Rootless Podman**
+> - [Part 4: Traefik & HTTPS](/blogs/vps-setup-4)
+> - [Part 5: Deploying, and One Script for All of It](/blogs/vps-setup-5)
 
-# Where This Continues From
+# Where We Are
 
-[Part 1](/blogs/vps-setup-part-1) secured the way in. [Part 2](/blogs/vps-setup-part-2) closed every port that did not need to be open and made the machine patch itself.
+[Part 1](/blogs/vps-setup-1) secured the login. [Part 2](/blogs/vps-setup-2) closed the ports and made the server patch itself.
 
-The server is now safe and completely useless. Nothing runs on it. This part fixes that.
+The server is safe now, and completely useless, because nothing runs on it. This part gets containers running.
 
-# Why Containers at All
+# Why Containers, and Why Podman
 
-For a single small application, containers are not obviously worth it. You could install Node, clone a repo, run it with a systemd service, and be done.
+For one small app, I could install Node, clone the repo and run it as a systemd service. That works until the second app needs a different Node version. With containers, every app brings its own dependencies, and removing an app removes all of it. The same image also runs the same way on my laptop and on the server.
 
-What changed my mind was the second application. Two Node apps on one machine means two Node versions eventually disagreeing, two sets of system dependencies, and an `/etc` slowly filling with service definitions I will not remember writing. The isolation is not really about security. It is about not having to hold the whole machine in my head. Each application carries its own dependencies, and removing one removes all of it.
+I picked Podman over Docker for this server for three reasons:
 
-The other half is reproducibility. A container that runs on my laptop runs the same way on the VPS, because it is the same image. That alone eliminates a whole genre of deployment bug.
+- **No daemon.** Docker runs one background service as root that owns every container. Podman doesn't have one; containers are just processes.
+- **Rootless is the normal way to use it.** Containers run as my normal user. Root inside a container is not root on the server.
+- **It fits systemd.** Debian already runs systemd, which handles starting things at boot, restarting them when they crash, and collecting logs. With Quadlet (below), a container is just another systemd service.
 
-## Why Podman Instead of Docker
+The commands are the same as Docker's (`podman run`, `podman ps`, `podman build`) and it uses the same images, so there wasn't much to relearn.
 
-Docker is the industry default, and the ecosystem, tooling, and community are far more mature. I did not pick Podman to be contrarian.
-
-**No daemon.** Docker runs a background service as root that owns every container, so if it dies, everything dies with it. Podman runs containers as direct child processes of whoever started them.
-
-**Rootless is the normal mode, not a special one.** Podman containers run as an unprivileged user by default, using Linux user namespaces. Root inside the container maps to my ordinary `admin` user outside it, so a container escape lands the attacker in an unprivileged account rather than on root.
-
-**It integrates with systemd properly.** This mattered most. Debian already runs systemd, which already handles starting things at boot, restarting them on failure, ordering dependencies, and collecting logs. Podman's Quadlet feature lets me describe a container as a systemd unit and get all of that, instead of running a second supervisor inside the first one.
-
-**The commands are the same.** `podman run`, `podman build`, `podman ps`. It is a drop-in replacement for daily use and consumes standard OCI images from Docker Hub.
-
-If you want the longer argument, including where Docker is still the better choice, I wrote it up separately in [Why I Chose Podman Over Docker](/blogs/why-podman-over-docker).
-
-# The Supporting Packages
-
-Rootless is not automatic just because the package is installed. Several pieces have to be in place, and each one fails in a different confusing way when it is missing. Debian Minimal pulls in none of them:
+# Installing Podman
 
 ```bash
-sudo apt install -y podman uidmap passt aardvark-dns netavark dbus-user-session
+sudo apt install -y podman passt crun netavark aardvark-dns catatonit uidmap dbus-user-session systemd-container
 ```
 
-- **`uidmap`** provides `newuidmap` and `newgidmap`, the setuid helpers that perform user namespace mapping. Without it, rootless containers fail immediately and the error does not obviously say why.
-- **`passt`** supplies `pasta`, the userspace networking Podman 5 uses for rootless containers.
-- **`netavark`** is the network backend and **`aardvark-dns`** is its DNS server. That second one is what lets containers find each other by name, which is exactly how Caddy reaches the application in [Part 4](/blogs/vps-setup-part-4). Skip it and you get baffling "no such host" errors between two containers that are demonstrably both running.
-- **`dbus-user-session`** gives your user a proper D-Bus session, which the per-user systemd instance needs to function at all.
+Most of these get pulled in anyway, but I'd rather list them so I know what's there:
+
+- `passt` provides `pasta`, the networking Podman uses for rootless containers.
+- `netavark` creates container networks, and `aardvark-dns` lets containers on the same network find each other by name. Part 4 depends on that.
+- `uidmap` has the helpers that make rootless work at all (more on that next).
+- `dbus-user-session` gives my user a proper session bus, which the per-user systemd needs.
+- `systemd-container` gives me `machinectl`, which I use below.
 
 # Checking the UID Mapping
 
-Rootless containers work by mapping a range of subordinate UIDs to your user. When a process claims to be UID 0 inside the container, the kernel translates that to some high, unprivileged UID on the host. That translation is the whole security model, and it needs a range allocated in advance.
-
-Debian's `adduser` normally does this, but confirm rather than assume:
+Rootless containers work by mapping a range of extra user IDs to my user. A process that thinks it's root (UID 0) inside the container is really some high, unprivileged UID on the server. That range has to be reserved for the user. `useradd` on Debian does it automatically, but check anyway:
 
 ```bash
 grep admin /etc/subuid /etc/subgid
@@ -73,16 +59,13 @@ grep admin /etc/subuid /etc/subgid
 /etc/subgid:admin:100000:65536
 ```
 
-A line from each file: a starting UID and how many are reserved. No output at all means no range is allocated, and every rootless container will fail. If either is missing:
+Start at 100000, 65536 of them. If either file has no line for your user, add one:
 
 ```bash
 sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 admin
-podman system migrate
 ```
 
-That `podman system migrate` matters. It makes existing containers pick up the new mapping instead of quietly staying on the old one.
-
-Now confirm the whole chain works:
+Then a quick test as `admin`:
 
 ```bash
 podman run --rm docker.io/library/alpine echo "rootless works"
@@ -92,47 +75,52 @@ podman run --rm docker.io/library/alpine echo "rootless works"
 Trying to pull docker.io/library/alpine:latest...
 Getting image source signatures
 Copying blob 9824c27679d3 done
-Copying config 91ef0af61f done
 Writing manifest to image destination
 rootless works
 ```
 
-The last line is the whole test. If the mapping were missing you would get this instead, which names nothing useful about the actual cause:
+I always write image names in full, with `docker.io/library/`. Podman doesn't assume Docker Hub the way Docker does, and the full name also makes it obvious where an image comes from.
 
-```output
-Error: cannot set up namespace using "/usr/bin/newuidmap": exit status 1
-```
+# Letting Containers Use Resource Limits
 
-Note the fully qualified image name. Podman does not silently assume Docker Hub the way Docker does. It will either prompt you to choose a registry or fail outright. Writing `docker.io/library/...` in full removes the ambiguity, and I now do it everywhere, including in unit files.
+Later I want to cap how much memory and CPU each container gets, so one broken app can't take the whole server down. For a rootless container, the limits are applied through the user's own systemd, and by default systemd doesn't give a user control over all of them.
 
-You can see the mapping directly, which makes the concept concrete:
+This drop-in hands them over:
 
 ```bash
-podman unshare cat /proc/self/uid_map
+sudo mkdir -p /etc/systemd/system/user@.service.d
+sudo nano /etc/systemd/system/user@.service.d/delegate.conf
+```
+
+```ini
+[Service]
+Delegate=cpu cpuset io memory pids
+```
+
+```bash
+sudo systemctl daemon-reload
+```
+
+It applies the next time the user's systemd starts, so log out and back in (or reboot), then check:
+
+```bash
+cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers
 ```
 
 ```output
-         0       1000          1
-         1     100000      65536
+cpuset cpu io memory pids
 ```
 
-Three columns: the UID inside the namespace, what it becomes on the host, and how many map that way. UID 0, root inside a container, is the host's `admin` (1000), and everything above it lands in the reserved range.
+If `memory` isn't in that list, a container's memory limit is silently ignored.
 
 # The Setting That Decides Everything
 
-This is the behaviour that surprised me most, and the most common reason a rootless Podman setup appears broken.
+This surprised me the most. A user's systemd services start when that user logs in and **stop when they log out**. So my containers would die the moment I closed SSH, and after a reboot at 4 AM nothing would come back.
 
-By default, a user's systemd services start when that user logs in and stop when they log out. Containers managed by your user session would shut down the moment you close SSH. The server reboots at 4 AM, nobody logs in, nothing comes back.
-
-`linger` changes that:
+Lingering fixes that:
 
 ```bash
 sudo loginctl enable-linger admin
-```
-
-With lingering enabled, this user gets a persistent systemd instance that starts at boot and keeps running whether or not anyone is logged in.
-
-```bash
 loginctl show-user admin --property=Linger
 ```
 
@@ -140,78 +128,75 @@ loginctl show-user admin --property=Linger
 Linger=yes
 ```
 
-This one line is the difference between containers that keep dying when you disconnect and a server that stays up unattended.
+Now `admin` gets its own systemd instance at boot, whether anyone is logged in or not. Without this line, Part 2's automatic reboots would take every app offline.
 
-One related habit: always run `systemctl --user` commands from a real SSH session as that user. Reaching for `sudo -u admin systemctl --user ...` fails with a cryptic bus connection error, because that shell has no `XDG_RUNTIME_DIR` pointing at the user's session.
+One habit to go with it: run `systemctl --user` from a real login as that user. `sudo -u admin systemctl --user ...` fails with a confusing D-Bus error, because that shell isn't connected to the user's session. If you're root and need a proper session as the user, `machinectl shell admin@` gives you one.
+
+# Container Settings
+
+Podman reads per-user settings from `~/.config/containers/containers.conf`:
+
+```bash
+mkdir -p ~/.config/containers
+nano ~/.config/containers/containers.conf
+```
+
+```ini
+[containers]
+log_driver = "journald"
+
+[engine]
+events_logger = "journald"
+
+[network]
+default_rootless_network_cmd = "pasta"
+```
+
+`journald` sends container output to the journal, so the log size cap from Part 2 covers containers too. No more log files growing forever somewhere in a container's storage.
 
 # Allowing Ports 80 and 443
 
-Ports below 1024 are privileged. A rootless container is, by definition, not privileged. That is a problem when the plan involves a web server on 80 and 443.
-
-There are a few ways around it: redirect with `iptables`, grant `CAP_NET_BIND_SERVICE`, or run the proxy rootful. I went with lowering the threshold, which is the easiest to reason about later:
+Ports below 1024 normally need root, and nothing here runs as root. In Part 4 the web ports will be opened by my user's systemd, so the threshold has to come down:
 
 ```bash
-echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/99-unprivileged-ports.conf
+sudo nano /etc/sysctl.d/90-rootless.conf
+```
+
+```ini
+net.ipv4.ip_unprivileged_port_start = 80
+fs.inotify.max_user_watches = 524288
+fs.inotify.max_user_instances = 1024
+```
+
+```bash
 sudo sysctl --system
 ```
 
-Be clear about what this does. It lets any unprivileged process on the machine bind ports 80 and above. On a shared multi-user system that is a real downgrade, since a low-privilege user could squat on a port meant for a system service.
+On a shared server, letting normal users take port 80 would be a bad idea. Here the only normal user is me, so that risk doesn't really exist. The inotify lines raise how many files a user can watch for changes, because the reverse proxy in Part 4 watches its config files.
 
-On a single-admin VPS where the only non-root user is me, that risk is not real. Still worth naming the trade-off rather than copying it blindly, because it is exactly the kind of setting that is fine here and wrong somewhere else.
+# Where Apps Will Live
 
-```bash
-sysctl net.ipv4.ip_unprivileged_port_start
-```
-
-```output
-net.ipv4.ip_unprivileged_port_start = 80
-```
-
-The default is `1024`. Seeing `80` here is what lets Caddy bind the web ports in [Part 4](/blogs/vps-setup-part-4) without any privilege at all.
-
-# Where Applications Will Live
-
-A small decision I am glad I made before there was anything to move. Everything the server runs lives under one directory in the user's home:
+One more small decision. Every app gets a directory under one place in my home directory:
 
 ```bash
 mkdir -p ~/apps
 ```
 
-Not `/var/www`, not `/opt`, not scattered across the filesystem. One directory, owned by a normal user, holding every application and its configuration.
-
-The reason is not tidiness. It is that a backup becomes a single question, "did I copy `~/apps`?", instead of a hunt through system paths trying to remember which config lives where. Combined with rootless containers, the entire deployment is one user's home directory.
+Not `/var/www`, not `/opt`. Everything that matters on this server ends up in `admin`'s home: the apps, their settings, and (rootless) their container data. Backing up the server means backing up one directory.
 
 # Quadlet: Containers as systemd Services
 
-My first instinct was `compose.yml`, because that is what I already knew. It works. But it left one question I could not get past: what starts these containers after a reboot?
+My first idea was a `compose.yml`, because that's what I knew. But then what starts the containers after a reboot? A restart policy needs a daemon, and Podman doesn't have one.
 
-The usual answers are a restart policy plus a daemon, a `@reboot` cron entry, or `podman generate systemd` producing a unit file you then maintain separately from the Compose file. All of them bolt a second mechanism onto the first.
-
-Quadlet removes the second mechanism. You write a file that looks like a systemd unit, drop it in `~/.config/containers/systemd/`, and a generator turns it into a real service at boot. The container is a systemd service, with proper boot ordering, restart policy, dependency handling, and logs in `journalctl` alongside everything else.
-
-Confirm the generator exists. It ships with Podman 4.4 and later:
-
-```bash
-ls /usr/lib/systemd/user-generators/podman-user-generator
-podman --version
-```
-
-```output
-/usr/lib/systemd/user-generators/podman-user-generator
-podman version 5.4.2
-```
-
-The path echoing back means the generator is installed. `No such file or directory` means Quadlet is not available and nothing below will work.
+Quadlet answers that. You write a small file that looks like a systemd unit, put it in `~/.config/containers/systemd/`, and systemd turns it into a real service. Starting at boot, restarting on failure, ordering and logs all come from systemd.
 
 ```bash
 mkdir -p ~/.config/containers/systemd
 ```
 
-I wrote a full reference for the unit file format, every section, all the file types, and the errors worth recognising, in [Podman Quadlet: Running Containers as systemd Services](/blogs/podman-quadlet-systemd). Here we will just prove it works.
-
 # The First Container
 
-Something disposable, to learn the loop before [Part 4](/blogs/vps-setup-part-4) depends on it:
+Something throwaway, to learn the loop. `whoami` is a tiny web server that just prints details about the request:
 
 ```bash
 nano ~/.config/containers/systemd/hello.container
@@ -223,8 +208,8 @@ Description=Quadlet test container
 
 [Container]
 ContainerName=hello
-Image=docker.io/library/caddy:2-alpine
-PublishPort=8080:80
+Image=docker.io/traefik/whoami
+PublishPort=127.0.0.1:8080:80
 
 [Service]
 Restart=always
@@ -233,24 +218,23 @@ Restart=always
 WantedBy=default.target
 ```
 
-Four sections, and the split between them is the thing to internalise:
+- `[Unit]` and `[Install]` are normal systemd sections. `WantedBy=default.target` is what makes it start at boot.
+- `[Container]` is Quadlet's own section. Each line becomes an option for `podman run`.
+- `[Service]` is normal systemd too. `Restart=always` goes here, not under `[Container]`. I put it in the wrong one the first time.
 
-- **`[Unit]`** and **`[Install]`** are ordinary systemd sections and mean exactly what they always mean.
-- **`[Container]`** is Quadlet's own section, where each key becomes a `podman run` argument.
-- **`[Service]`** is where systemd service directives go. `Restart=always` belongs here, not in `[Container]`. Putting it in the wrong section is a common early mistake.
+`127.0.0.1:8080` keeps the port on the server itself. The firewall would block 8080 from outside anyway, but I'd rather not publish it at all.
 
-`[Install] WantedBy=default.target` is what makes it start at boot. You cannot `systemctl --user enable` a Quadlet service, because the unit is generated rather than installed on disk. This section plus a reload is the mechanism.
+Before loading it, Quadlet can check the file:
 
-Now the loop:
+```bash
+/usr/libexec/podman/quadlet -dryrun -user
+```
+
+It prints the service it would generate, or an error saying which line it didn't like. Then:
 
 ```bash
 systemctl --user daemon-reload
 systemctl --user start hello
-```
-
-That `daemon-reload` is what triggers the generator to read your `.container` files and produce services. Any time you add or edit a unit file, reload before starting. Editing a file and wondering why nothing changed is the most common Quadlet mistake there is, and it costs everyone the same twenty minutes.
-
-```bash
 systemctl --user status hello
 ```
 
@@ -258,47 +242,39 @@ systemctl --user status hello
 ● hello.service - Quadlet test container
      Loaded: loaded (/home/admin/.config/containers/systemd/hello.container; generated)
      Active: active (running) since Fri 2026-05-22 11:04:18 WIB; 5s ago
-   Main PID: 2841 (conmon)
 ```
 
-Note `generated` on the `Loaded` line rather than a path under `/etc`. That is the Quadlet generator having done its job. If the service is not found at all, the `daemon-reload` did not happen.
+`daemon-reload` is the step that runs the generator. Every time you add or change a `.container` file, reload before starting. Editing the file and wondering why nothing changed is the classic Quadlet mistake.
+
+Notice it says `generated`. You can't `systemctl --user enable` a Quadlet service; the `[Install]` section plus a reload is how it gets enabled.
 
 ```bash
-podman ps
+curl http://127.0.0.1:8080
 ```
 
 ```output
-CONTAINER ID  IMAGE                             STATUS        PORTS                 NAMES
-7d1e4b9a03c2  docker.io/library/caddy:2-alpine  Up 5 seconds  0.0.0.0:8080->80/tcp  hello
+Hostname: 7d1e4b9a03c2
+IP: 127.0.0.1
+...
+GET / HTTP/1.1
+Host: 127.0.0.1:8080
+User-Agent: curl/8.14.1
+Accept: */*
 ```
 
-```bash
-curl -I http://localhost:8080
-```
-
-```output
-HTTP/1.1 200 OK
-content-type: text/html; charset=utf-8
-server: Caddy
-```
-
-A `200 OK` means rootless containers, networking, port publishing, and the systemd integration all work. Logs go where every other service's logs go:
+A response means rootless containers, networking and the systemd part all work. Logs are where every other service's logs are:
 
 ```bash
 journalctl --user -u hello -f
 ```
 
-```output
-May 22 11:04:18 my-vps hello[2841]: {"level":"info","msg":"using config from file",
-                                     "file":"/etc/caddy/Caddyfile"}
-May 22 11:04:18 my-vps hello[2841]: {"level":"info","msg":"serving initial configuration"}
-```
-
-Now the real test. Does it survive a reboot with nobody logged in?
+Now the real test. Does it come back after a reboot, with nobody logged in?
 
 ```bash
 sudo reboot
 ```
+
+Log back in:
 
 ```bash
 systemctl --user is-active hello
@@ -308,9 +284,9 @@ systemctl --user is-active hello
 active
 ```
 
-If it came back on its own, lingering is working and the foundation is sound. If it did not, `loginctl show-user admin --property=Linger` is the first thing to check.
+If it says `active`, lingering works and the setup holds without me. If it doesn't, check `loginctl show-user admin --property=Linger` first.
 
-Then clean up:
+Clean up:
 
 ```bash
 systemctl --user stop hello
@@ -318,12 +294,50 @@ rm ~/.config/containers/systemd/hello.container
 systemctl --user daemon-reload
 ```
 
+# Cleaning Up Old Images
+
+Every deploy will pull a new image, and old ones pile up. A small timer in my user's systemd removes images nothing has used for a week:
+
+```bash
+mkdir -p ~/.config/systemd/user
+nano ~/.config/systemd/user/image-prune.service
+```
+
+```ini
+[Unit]
+Description=Remove container images unused for a week
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman image prune --all --force --filter until=168h
+```
+
+```bash
+nano ~/.config/systemd/user/image-prune.timer
+```
+
+```ini
+[Unit]
+Description=Weekly container image cleanup
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now image-prune.timer
+```
+
+`Persistent=true` means if the server was off when the timer should have run, it runs as soon as it's back.
+
 # Where the Server Stands
 
-Rootless Podman works, containers survive both logout and reboot, ports 80 and 443 are available to an unprivileged user, and there is a directory layout that a single backup captures.
+Rootless Podman works, it can enforce memory and CPU limits, containers survive logging out and rebooting, and my user can open ports 80 and 443.
 
-There is still no website. But everything a website needs to run is in place, and the reboot test proves it stays that way without supervision.
-
-# Next Part
-
-In [Part 4](/blogs/vps-setup-part-4), Caddy goes in front as a reverse proxy: a private container network, persistent certificate storage, and automatic HTTPS on a real domain with no `certbot` anywhere in sight.
+There's still no website. [Part 4](/blogs/vps-setup-4) puts Traefik in front for HTTPS.

@@ -1,0 +1,259 @@
+---
+title: 'Bagaimana Saya Menyiapkan Fedora dengan Umbriel dan Noctalia'
+description: 'Menyiapkan desktop Linux saya di Fedora, langkah demi langkah: dari instalasi Minimal (atau Workstation dengan GNOME sebagai cadangan), repositori tambahan, codec, driver NVIDIA dengan Secure Boot, Umbriel, Noctalia dan layar login-nya, serta installer dotfiles yang mengerjakan semuanya dengan satu perintah.'
+date: '2026-09-01'
+updated: '2026-10-15'
+tags: [fedora, linux, noctalia, umbriel, customization, desktop, dotfiles]
+---
+
+import { BlogImage } from '@components/molecules'
+import desktop from '@assets/blogs/my-fedora-setup/desktop.png'
+
+# Pendahuluan
+
+Saya mau desktop Linux yang ringan, gampang dikustomisasi, dan tersusun sesuai selera saya tanpa harus menghabiskan seharian setiap kali install ulang.
+
+Hasil akhirnya: Fedora sebagai dasar, Umbriel sebagai window manager, Noctalia sebagai desktop shell, dan Noctalia Greeter sebagai layar login.
+
+Pertama kali, semuanya saya kerjakan manual dan saya catat. Itulah tulisan ini. Setelahnya semua itu saya masukkan ke installer di [dotfiles](https://github.com/r3p-dev/dotfiles) saya, jadi sekarang instalasi baru bisa jadi desktop saya dengan satu perintah. Itu ada di bagian akhir.
+
+# Komponennya
+
+**Fedora.** Package-nya baru, tapi rilis baru cuma datang kira-kira setiap enam bulan, jadi saya yang menentukan kapan sistem dasarnya berubah. Secure Boot langsung jalan, dan itu penting untuk driver NVIDIA nanti.
+
+**Umbriel.** Scrolling window manager. Jendela baru terbuka berderet ke samping, bukan menghimpit jendela yang sudah ada, lalu saya tinggal menggulirnya. Awalnya saya melirik Niri untuk itu, tapi Umbriel punya scratchpad: tempat tersembunyi untuk aplikasi yang sering saya buka tapi tidak ingin terus nongkrong di workspace. Itu yang bikin saya memilihnya.
+
+**Noctalia.** Desktop shell-nya: panel, launcher, notifikasi, wallpaper, riwayat clipboard, kontrol sistem, semua jadi satu. Dibuat oleh pengembang yang sama dengan Umbriel, jadi keduanya cocok. Umbriel mengatur jendela, Noctalia mengatur semua yang ada di sekitarnya.
+
+**Noctalia Greeter.** Layar login. Ia mengikuti tema Noctalia, jadi tampilannya sama dari login sampai desktop tanpa saya harus membuat tema terpisah untuk layar login.
+
+# Minimal atau Workstation
+
+Setup ini dibuat untuk **Fedora Minimal**: mulai dari hampir kosong dan hanya memasang yang saya pakai. Tidak ada desktop kedua, tidak ada aplikasi yang toh akan saya hapus.
+
+Tapi sekarang saya masih di **Fedora Workstation**. Umbriel masih muda dan banyak berubah antar build, dan saya sedang di tengah mengerjakan skripsi. Saya tidak bisa kehilangan satu hari karena update merusak window manager saya. Dengan Workstation, GNOME tetap terpasang sebagai sesi kedua, jadi kalau Umbriel rusak, saya login ke GNOME dan tetap bisa kerja sampai masalahnya beres.
+
+Semua langkah di bawah jalan di keduanya. Bedanya cuma di langkah pertama dan di layar login, dan nanti saya tandai.
+
+# Mulai dari Minimal
+
+Instalasi Minimal berasal dari ISO Fedora Everything: di installer, pilih **Minimal Install** di bagian pemilihan software. Hasilnya boot ke login teks, tanpa desktop dan tanpa audio.
+
+Jadi tugas pertama adalah sistem dasar yang biasanya sudah dibawa Workstation:
+
+```bash
+sudo dnf install \
+  pipewire pipewire-pulseaudio pipewire-alsa pipewire-utils wireplumber \
+  alsa-utils alsa-sof-firmware pavucontrol rtkit \
+  NetworkManager NetworkManager-wifi nss-mdns openssh-clients firewalld wireless-regdb \
+  bluez bluez-obexd linux-firmware fwupd upower tuned-ppd smartmontools dmidecode \
+  xorg-x11-server-Xwayland mesa-vulkan-drivers mesa-dri-drivers seatd qt6-qtwayland \
+  xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-utils polkit accountsservice \
+  unzip unrar xz dosfstools exfatprogs ntfs-3g gvfs gvfs-mtp \
+  google-noto-sans-fonts google-noto-serif-fonts google-noto-color-emoji-fonts \
+  dejavu-sans-fonts dejavu-sans-mono-fonts \
+  liberation-sans-fonts liberation-serif-fonts liberation-mono-fonts \
+  git curl wget rsync
+```
+
+Kalau dikelompokkan:
+
+- **Audio.** PipeWire, ditambah firmware yang dibutuhkan kartu suara banyak laptop (`alsa-sof-firmware`).
+- **Jaringan dan Bluetooth.** NetworkManager dengan Wi-Fi, firewall, dan `nss-mdns` supaya nama `.local` di jaringan saya bisa ditemukan.
+- **Hardware.** Firmware, update firmware (`fwupd`), info baterai (`upower`), dan profil daya (`tuned-ppd`, yang diajak bicara oleh menu daya Noctalia).
+- **Dasar desktop.** Driver grafis, Xwayland, portal (pemilih berkas dan berbagi layar untuk aplikasi), dan polkit untuk prompt password saat sesuatu butuh hak admin.
+- **Disk dan berkas.** Dukungan USB berformat FAT, exFAT, atau NTFS, ponsel lewat MTP, dan arsip.
+- **Font.** Noto (termasuk emoji), DejaVu, dan Liberation, supaya situs web dan dokumen tidak jatuh ke font yang jelek.
+
+# Mulai dari Workstation
+
+Workstation sudah punya semua itu, ditambah GNOME dan seperangkat aplikasi GNOME. GNOME-nya saya biarkan sebagai cadangan, tapi aplikasi yang tidak pernah saya buka saya hapus:
+
+```bash
+sudo dnf remove gnome-software gnome-tour gnome-contacts gnome-clocks gnome-calendar \
+  gnome-weather gnome-maps gnome-boxes gnome-font-viewer gnome-characters \
+  gnome-system-monitor gnome-calculator gnome-text-editor gnome-connections \
+  gnome-user-docs mediawriter malcontent-control yelp ptyxis showtime loupe \
+  decibels papers papers-previewer papers-nautilus evince-djvu simple-scan \
+  'libreoffice*' fedora-workstation-repositories
+sudo dnf autoremove
+```
+
+Kitty menggantikan Ptyxis sebagai terminal, imv dan mpv menggantikan penampil gambar dan video, dan saya tidak butuh LibreOffice. Nautilus tetap jadi file manager saya. `fedora-workstation-repositories` cuma menambahkan beberapa berkas repo pihak ketiga (Chrome, Steam, dan lainnya) yang tidak saya pakai.
+
+Melakukan ini sebelum update berarti update-nya tidak mengunduh versi baru dari aplikasi yang sebentar lagi saya hapus.
+
+# Update
+
+```bash
+sudo dnf upgrade --refresh
+```
+
+# Repositori Tambahan
+
+Repositori Fedora sendiri tidak punya semuanya. Ini yang saya tambahkan, dan untuk apa:
+
+```bash
+# RPM Fusion: codec lengkap, dan driver NVIDIA
+sudo dnf install \
+  https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+  https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+
+# Terra: Umbriel, Noctalia, Noctalia Greeter, Starship
+sudo dnf install --nogpgcheck --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' terra-release
+
+# COPR: hyprpicker (color picker) dan yazi (file manager di terminal)
+sudo dnf copr enable lionheartp/Hyprland
+sudo dnf copr enable lihaohong/yazi
+
+# vendor: Brave, GitHub CLI, cloudflared
+sudo dnf config-manager addrepo --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
+sudo dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo
+sudo dnf config-manager addrepo --from-repofile=https://pkg.cloudflare.com/cloudflared.repo
+```
+
+Repo VS Code butuh kuncinya diimpor dulu, jadi perlu beberapa baris lagi; [halaman setup Linux](https://code.visualstudio.com/docs/setup/linux) dari Microsoft punya langkahnya.
+
+`--nogpgcheck` untuk Terra cuma berlaku untuk package pertama itu. `terra-release` memasang kunci tanda tangan Terra, dan semua setelahnya dicek seperti biasa.
+
+# Codec
+
+Fedora membawa versi ffmpeg dan driver video Mesa yang dipangkas, tanpa codec berpaten seperti H.264 dan H.265. Versi lengkapnya ada di RPM Fusion. Keduanya bentrok dengan versi Fedora, jadi harus di-swap, bukan dipasang:
+
+```bash
+sudo dnf swap ffmpeg-free ffmpeg --allowerasing
+sudo dnf swap mesa-va-drivers mesa-va-drivers-freeworld --allowerasing
+sudo dnf group upgrade multimedia --setopt="install_weak_deps=False" --exclude=PackageKit-gstreamer-plugin
+sudo dnf group upgrade sound-and-video
+```
+
+Yang Mesa itu yang membuat grafis AMD di laptop saya bisa men-decode video lewat hardware, jadi memutar video tidak menghabiskan CPU dan baterai.
+
+# Memasang Semuanya
+
+Lalu desktop-nya dan tool yang saya pakai sehari-hari:
+
+```bash
+sudo dnf install \
+  umbriel-nightly noctalia noctalia-greeter greetd xwayland-satellite \
+  kitty fish starship zoxide fastfetch yazi \
+  git curl wget rsync jq bc fd-find ripgrep fzf 7zip unzip translate-shell \
+  poppler-utils ImageMagick resvg git-filter-repo \
+  wl-clipboard slurp hyprpicker gpu-screen-recorder \
+  tesseract tesseract-langpack-eng tesseract-langpack-ind zbar \
+  imv mpv mpv-mpris gphoto2 udisks2 \
+  podman podman-compose gcc gcc-c++ make clang code gh cloudflared \
+  brave-origin gnome-keyring libsecret
+```
+
+Kebanyakan sudah jelas. Beberapa yang tidak:
+
+- `xwayland-satellite` membuat aplikasi X11 lama bisa jalan di Umbriel, yang hanya Wayland.
+- `slurp`, `hyprpicker`, `gpu-screen-recorder`, `tesseract`, dan `zbar` untuk plugin screen toolkit di Noctalia. Satu tombol (`Print`) memberi saya screenshot, rekam layar, color picker, pengenalan teks dari area yang dipilih (Inggris dan Indonesia), dan pemindai kode QR.
+- `gnome-keyring` dan `libsecret` menyimpan password untuk aplikasi seperti VS Code dan Brave, supaya mereka tidak minta login lagi setiap kali.
+- `podman` karena database lokal saya jalan di kontainer, sama seperti di server saya.
+
+## NVIDIA dan Secure Boot
+
+Laptop saya punya kartu NVIDIA di samping grafis AMD, dan driver-nya ada di RPM Fusion. Driver itu di-build secara lokal untuk kernel, dan dengan Secure Boot menyala, kernel hanya mau memuatnya kalau ditandatangani kunci yang dipercaya firmware. Mendaftarkan kunci itu butuh reboot:
+
+```bash
+sudo dnf install akmods mokutil
+sudo kmodgenca -a
+sudo mokutil --import /etc/pki/akmods/certs/public_key.der
+sudo reboot
+```
+
+`mokutil` minta password sekali pakai. Setelah reboot, muncul layar biru MOK Manager: pilih **Enroll MOK**, lalu **Continue**, dan ketik password tadi. Kembali di Fedora:
+
+```bash
+sudo dnf install akmod-nvidia-open xorg-x11-drv-nvidia-cuda libva-nvidia-driver
+```
+
+Saya pakai kernel module open (`-open`), yang memang direkomendasikan NVIDIA untuk kartu Turing ke atas.
+
+Jangan langsung reboot. Driver-nya di-build di latar selama beberapa menit, dan reboot sebelum selesai menghasilkan boot tanpa driver. `modinfo -F version nvidia` mencetak versi begitu ia siap.
+
+# Layar Login
+
+Layar login-nya adalah greetd yang menjalankan Noctalia Greeter:
+
+```bash
+sudo nano /etc/greetd/config.toml
+```
+
+```toml
+[terminal]
+vt = 1
+
+[default_session]
+command = "/usr/bin/noctalia-greeter-session -- --session umbriel"
+user = "greetd"
+```
+
+`--session umbriel` menjadikan Umbriel sesi default. `user` adalah akun yang dipakai greetd untuk menjalankan greeter, dan di Fedora namanya `greetd`. Kalau namanya salah, greetd langsung berhenti dengan "session user not found", dan yang kita dapat layar hitam.
+
+```bash
+sudo chown -R greetd: /var/lib/noctalia-greeter
+sudo systemctl enable greetd
+```
+
+Greeter menyimpan pengaturannya di `/var/lib/noctalia-greeter`, dan direktori itu harus miliknya. Kalau tidak, layar hitam lagi, padahal `systemctl status greetd` bilang semuanya baik-baik saja.
+
+Langkah terakhirnya tergantung dari mana kita mulai:
+
+- **Workstation:** layar login GNOME (GDM) sedang aktif, jadi matikan dengan `sudo systemctl disable gdm`. GNOME-nya sendiri tetap terpasang sebagai sesi cadangan.
+- **Minimal:** secara default ia boot ke konsol teks, jadi greetd tidak akan pernah jalan. `sudo systemctl set-default graphical.target` membereskannya.
+
+Sebelum reboot, tes dulu dari TTY dengan `sudo systemctl start greetd`. Kalau muncul, baru reboot.
+
+# Shell dan Dev Tools
+
+Fish jadi shell saya, dengan Starship untuk prompt dan zoxide untuk lompat antar direktori:
+
+```bash
+sudo usermod -s /usr/bin/fish $USER
+```
+
+Node, Bun, dan Rust dipasang dari installer masing-masing ke direktori home, bukan dari dnf. Tiap proyek butuh versi Node yang berbeda, dan dengan cara ini saya bisa berganti versi tanpa `sudo`:
+
+```bash
+curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+curl -fsSL https://bun.sh/install | bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+```
+
+# Berkas Config
+
+Sisanya konfigurasi, semuanya di `~/.config`:
+
+- `umbriel/` berisi `config.toml` (tampilan, animasi, input, aturan jendela) dan `keybinds.toml`. `Super` saja membuka launcher, `Super+Return` membuka Kitty, `Super+B` Brave, `Super+Y` yazi, dan `Super+V` riwayat clipboard.
+- `noctalia/` berisi config shell dan palet warna kustom saya. Noctalia menuliskan warna yang sama ke tema Kitty dan Umbriel, jadi semuanya memakai palet yang sama.
+- `kitty/`, `yazi/`, `fastfetch/`, `fish/`, dan `starship.toml` untuk sisi terminal.
+- `containers/systemd/postgres.container` adalah unit Quadlet untuk database PostGIS lokal, dijalankan systemd seperti layanan lainnya.
+
+# Semuanya dalam Satu Perintah
+
+Mengerjakannya manual sekali itu berguna, tapi saya tidak mau mengulanginya. Jadi semua yang di atas ada di installer dotfiles saya:
+
+```bash
+curl -fsSL https://dotfiles.r3p.dev/install.sh | bash
+```
+
+Ia menjalankan langkah yang sama dengan urutan yang sama. Di Workstation ia membuang aplikasi dulu; di Minimal tidak ada yang perlu dibuang. Lalu update, memasang sistem dasar, menambahkan repositori, menukar codec, memasang package dan driver NVIDIA, menyiapkan greetd, Fish, dan toolchain, lalu menyalin berkas config ke `~/.config`.
+
+Karena Secure Boot, di laptop saya ia berjalan dua tahap: tahap pertama mendaftarkan kunci dan reboot, lalu menjalankannya lagi setelah layar MOK mengerjakan sisanya. Di mesin tanpa NVIDIA atau Secure Boot cukup sekali jalan.
+
+Ia mengunduh repositori ke folder sementara dan menghapusnya setelahnya, jadi tidak ada yang tertinggal di direktori home saya. Kalau mau menjalankannya sendiri, baca [skripnya](https://github.com/r3p-dev/dotfiles/blob/main/install.sh) dulu. Ia menghapus aplikasi dan menambahkan repositori, dan disusun untuk mesin saya, bukan mesin kita masing-masing.
+
+# Setup Saya Saat Ini
+
+<BlogImage src={desktop} alt="Desktop Umbriel dan Noctalia" />
+
+Fedora di bawahnya (Workstation untuk sekarang, Minimal begitu Umbriel lebih stabil dan skripsi saya selesai), Umbriel mengatur jendela, Noctalia untuk semua di sekitarnya, Noctalia Greeter saat login, dan semuanya dibangun ulang dari satu repositori.
+
+Repositori yang sama juga menyimpan [skrip yang menyiapkan VPS saya](/id/blogs/vps-setup-5), jadi kedua mesin yang saya pakai bisa dibangun ulang dari satu tempat.
+
+# Penutup
+
+Saya tidak mengejar desktop yang paling keren dilihat. Saya cuma mau komputer saya terasa seperti milik saya waktu dinyalakan: shortcut saya, scratchpad saya, warna saya. Dan kalau install ulang, saya mau semua itu kembali dengan satu perintah, bukan dengan menghabiskan satu sore.

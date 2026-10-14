@@ -1,0 +1,254 @@
+---
+title: 'How to Set Up a VPS for Beginners, from a Beginner (Part 5: Deploying, and One Script for All of It)'
+description: Part 5 of setting up my first VPS on Debian 13. Deploying from GitHub on every push, with a deploy key that can only do one thing, health checks and automatic rollback, and vps-setup.sh, the script that sets up the whole series in one command.
+date: '2026-05-24'
+tags: [vps, debian, podman, quadlet, traefik, deployment, github-actions, automation]
+---
+
+> **A 5-part series.**
+>
+> - [Part 1: Securing the Base System](/blogs/vps-setup-1)
+> - [Part 2: Firewall, Bans & Updates](/blogs/vps-setup-2)
+> - [Part 3: Rootless Podman](/blogs/vps-setup-3)
+> - [Part 4: Traefik & HTTPS](/blogs/vps-setup-4)
+> - **Part 5: Deploying, and One Script for All of It**
+
+# Where We Are
+
+After [Part 4](/blogs/vps-setup-4), a container with the right labels gets a domain and HTTPS. What's missing is how my apps get there.
+
+What I wanted: I push to `main`, GitHub builds the image, the server runs it, and if the new version is broken, the old one keeps running. I don't want to SSH in and copy files around.
+
+Parts 1 to 4 were things I typed once. Deploying happens on every push, so it needs a program on the server that does it the same way every time. I wrote that program as a shell script. Once I had a script on the server anyway, I put everything from Parts 1 to 4 into it as well. That's [`vps-setup.sh`](https://github.com/r3p-dev/dotfiles/blob/main/vps-setup.sh), and this site is deployed with it.
+
+# How a Deploy Works
+
+```text
+git push to main
+  ↓
+GitHub Actions builds the image and pushes it to GHCR
+  ↓
+it connects to the server with a key that can only deploy this one app
+  ↓
+the server checks the repo's compose.yaml and turns it into Quadlet units
+  ↓
+only the services that changed restart, then it waits until they're healthy
+  ↓
+live, or rolled back to the previous version
+```
+
+GHCR is GitHub's container registry. Images live next to the code, and the workflow can push to it without any extra account.
+
+# Getting the Script
+
+It lives in my [dotfiles repository](https://github.com/r3p-dev/dotfiles), next to my desktop setup. On a fresh Debian 13 server, as root:
+
+```bash
+apt install -y curl
+curl -fsSLO https://dotfiles.r3p.dev/vps-setup.sh
+less vps-setup.sh
+```
+
+Download it and read it before you run it, instead of piping `curl` into `bash`. It rewrites the SSH config of the server you're connected to, so it's worth knowing what's in it. (It also refuses to run from a pipe, because it installs a copy of itself as a command afterwards.)
+
+It's long, around 2,600 lines, but it's one function per step, in the same order as this series. Reading only the parts you care about works fine.
+
+# The Config File
+
+All settings live in one file. The script can print a commented example:
+
+```bash
+bash vps-setup.sh config-example > vps.conf
+nano vps.conf
+```
+
+Four values are required. Everything else has a sensible default:
+
+```text
+USER_NAME="admin"                  # your one login: SSH, sudo, and owner of all apps
+SSH_PUBLIC_KEY="ssh-ed25519 AAAA… you@laptop"
+ACME_EMAIL="you@example.org"       # for Let's Encrypt
+GITHUB_OWNER="your-github-name"    # CI may deploy ghcr.io/<owner>/* only
+
+SSH_PORT="22022"
+TIMEZONE="Asia/Jakarta"
+```
+
+`SSH_PUBLIC_KEY` is the `.pub` line from [Part 1](/blogs/vps-setup-1#ssh-keys). If you leave it empty, the script tries the keys at `github.com/<GITHUB_KEYS_USER>.keys`, then the keys already in root's `authorized_keys`. If it can't find a single key, it stops. It won't turn off password login on a server you then can't get into.
+
+The file is read as plain `KEY="value"` lines, never run as shell code, and a typo in a key name gets a warning.
+
+# Running It
+
+```bash
+sudo bash vps-setup.sh init --config vps.conf
+```
+
+It shows the plan first and asks before touching anything:
+
+```output
+==> Plan
+    user          admin — the only login: SSH key, sudo, owns every container
+    ssh           port 22022, keys only (passwords and root login disabled)
+    https         Traefik (docker.io/library/traefik:v3.7), Let's Encrypt <you@example.org>
+    deploys       from ghcr.io/your-github-name/* (GitHub Actions)
+
+  ! After this, SSH accepts ONLY 'admin' with the key(s) listed above.
+  ! Keep this session open until 'ssh admin@203.0.113.10' works from a NEW terminal.
+Proceed? [y/N]
+```
+
+That warning is the same advice as in Part 1: keep the session open until a new login works. Then it goes through each step and checks the result:
+
+```output
+==> Base system
+  ✓ packages installed and up to date
+  ✓ time, journald and core dumps configured
+
+==> User admin
+  ✓ SSH keys, sudo, lingering user services, cgroup delegation
+
+==> Memory
+  ✓ zram swap: 50% of 1967 MiB RAM, zstd
+...
+==> Firewall (nftables)
+  ✓ inbound: default deny — open: ssh/22022, 80, 443 (tcp+udp)
+
+==> SSH
+  ✓ keys only, no root login, only admin may log in, port 22022
+```
+
+At the end it prints the exact `ssh` command to test from a new terminal, the server's fingerprint, and the DNS records to create.
+
+Running it again is safe. A file is only rewritten when its content changes, and a service only restarts when its config did. When I want to change something, I edit `/etc/vps/vps.conf` (the script saves the config there) and run `sudo vps init` again.
+
+## What It Does
+
+It's Parts 1 to 4, in the same order:
+
+| Part                    | What the script sets up                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| [1](/blogs/vps-setup-1) | Updates, base packages, hostname, timezone, NTP                                                             |
+| [1](/blogs/vps-setup-1) | One user with `sudo`, your keys (weak RSA keys are skipped), a `sudo` password you choose                   |
+| [1](/blogs/vps-setup-1) | `00-vps-hardening.conf` for SSH, the port on `ssh.socket`, checked with `sshd -t` and `sshd -T`             |
+| [2](/blogs/vps-setup-2) | The nftables firewall, fail2ban with `recidive`, unattended upgrades with a 4 AM reboot, needrestart        |
+| [2](/blogs/vps-setup-2) | zram, the kernel settings and BBR, the journal cap, no core dumps                                           |
+| [3](/blogs/vps-setup-3) | Podman, subuids, cgroup delegation, lingering, `containers.conf`, the port threshold, the image prune timer |
+| [4](/blogs/vps-setup-4) | Traefik with both socket units, its static and dynamic config, the `web` network, the daily auto-update     |
+
+The file names have `vps` in them (`90-vps.conf` and so on), so it's easy to see which files the script wrote.
+
+# Deploying an App
+
+After `init`, the script is installed as the `vps` command. Everything from here runs as `admin`, without `sudo`. Setting up a repo is three commands on the server:
+
+```bash
+vps ci-key myapp                    # a deploy key, printed as 5 GitHub secrets
+vps workflow myapp --after CI       # the GitHub Actions workflow
+vps compose-example                 # a starting compose.yaml
+```
+
+## The Deploy Key
+
+`vps ci-key` makes a new SSH key just for this app and adds it to `authorized_keys` like this:
+
+```text
+restrict,command="/usr/local/bin/vps deploy-hook --app myapp" ssh-ed25519 AAAA… vps-ci:myapp
+```
+
+`command=` means that whatever GitHub Actions asks to run, the server runs `vps deploy-hook` for `myapp` instead. `restrict` turns off shells, port forwarding and everything else. If that key ever leaks, the most someone can do with it is redeploy this one app, with images from my own GHCR account. Running `vps ci-key myapp` again replaces the key.
+
+It prints five values to paste into the repo's secrets: host, port, user, the private key, and the server's host keys. With the host keys, the workflow can refuse to connect to anything pretending to be my server.
+
+The workflow also passes along its own short-lived `GITHUB_TOKEN`, so the server can pull the image even if the package is private. The server uses it once, keeps it in memory only, and deletes it when the deploy finishes.
+
+## The Workflow
+
+`vps workflow myapp` prints a ready GitHub Actions file. Save it as `.github/workflows/cd.yml`. It has two jobs: build the image and push it to GHCR, then send the image name and the repo's `compose.yaml` to the server over SSH.
+
+With `--after CI`, it only runs after my existing `CI` workflow (tests, lint) passes on `main`, and it deploys exactly the commit that was tested. This site's [`cd.yml`](https://github.com/r3p-dev/portfolio/blob/main/.github/workflows/cd.yml) is one of these.
+
+## The Compose File
+
+What to run is described in a normal `compose.yaml` in the repo. This is the one for this site:
+
+```yaml
+services:
+  web:
+    image: ${IMAGE}
+    labels:
+      vps.domain: r3p.dev
+      vps.redirect: www.r3p.dev
+      vps.port: '4321'
+    cap_drop: [ALL]
+    healthcheck:
+      test: ['CMD', 'bun', 'healthcheck.ts']
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+```
+
+- `image: ${IMAGE}` is replaced with the exact image the workflow just built, pinned by its digest. A tag can be moved later; a digest can't.
+- `vps.domain` and `vps.port` turn into the Traefik labels from Part 4. I don't write those by hand anymore.
+- `vps.redirect` sends `www` to the main domain with a 301.
+- The health check is what tells the server whether the new version actually works.
+
+Since this file comes from CI, the server is strict about what it accepts:
+
+- No `ports`. Everything goes through Traefik.
+- No bind mounts, `privileged`, host networking or devices. Named volumes only, and only a short list of capabilities.
+- Images only from my own GHCR account and Docker's official images.
+- No secrets in the file. Each app gets one `.env` file on the server, set with `vps env myapp DB_PASSWORD=…`.
+
+Anything else is rejected before a single container starts, with a message naming the service and the problem.
+
+Then [Podlet](https://github.com/containers/podlet) converts the compose file into Quadlet units, the same kind of `.container` files from [Part 3](/blogs/vps-setup-3#quadlet-containers-as-systemd-services). The script adds a private network for the app, memory, CPU and process limits, `NoNewPrivileges`, and the Traefik labels. It also checks Podlet's output and refuses any setting that isn't on a short allowed list. Podlet itself is downloaded at a fixed version and checked against a checksum.
+
+## Health Checks and Rollback
+
+Each deploy is saved as a release in `~/apps/myapp/releases/`, and a `current` link points at the live one.
+
+Only services whose unit actually changed get restarted. If a service has a health check, systemd waits until it reports healthy before calling the start done. So an app that depends on a database waits until the database is healthy, not just started. Then the script waits a few more seconds and checks that everything is still up.
+
+If something isn't, it switches back to the previous release, and the GitHub run fails:
+
+```output
+  ! myapp-web is not running (failed failed)
+  ! rolling back to the previous release
+error: deploy failed — the previous release is running again (logs: vps logs myapp)
+```
+
+A broken push leaves the old version online, and I find out from GitHub instead of from someone visiting the site.
+
+# Day to Day
+
+I mostly use four commands:
+
+```bash
+vps status          # the server, then every app
+vps logs myapp -f   # logs from all of an app's services
+vps rollback myapp  # back to the previous release
+vps env myapp       # edit secrets, then restart to apply
+```
+
+```output
+APP                  STATE        RELEASE                    DOMAINS
+portfolio            running      20261014T161203.482913377  r3p.dev,www.r3p.dev
+```
+
+`vps help` lists the rest.
+
+# What It Doesn't Do
+
+- **Backups.** Everything is in one user's home directory, so a backup is easy to set up, but the script doesn't set one up.
+- **More than one server.** It manages one machine. No replicas, no load balancing between servers.
+- **Other distributions.** Debian 13 or newer, on x86_64 or arm64. It checks first and stops otherwise.
+
+# Wrapping Up
+
+I'm glad I did Parts 1 to 4 by hand first. I wouldn't trust a script that rewrites my SSH config if I didn't know why `00-` in the file name matters, or why the firewall reloads instead of restarting.
+
+Now the server this site runs on is set up with one command, and deploying is a `git push`.
+
+The script is in [my dotfiles](https://github.com/r3p-dev/dotfiles/blob/main/vps-setup.sh), and the deploy files for this site are in [its repository](https://github.com/r3p-dev/portfolio) if you want a working example to copy.

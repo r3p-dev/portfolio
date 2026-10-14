@@ -1,0 +1,259 @@
+---
+title: 'How I Set Up Fedora with Umbriel and Noctalia'
+description: 'Setting up my Linux desktop on Fedora, step by step: from a Minimal install (or Workstation with GNOME as a fallback), the extra repositories, codecs, the NVIDIA driver with Secure Boot, Umbriel, Noctalia and its login screen, and the dotfiles installer that does all of it in one command.'
+date: '2026-09-01'
+updated: '2026-10-15'
+tags: [fedora, linux, noctalia, umbriel, customization, desktop, dotfiles]
+---
+
+import { BlogImage } from '@components/molecules'
+import desktop from '@assets/blogs/my-fedora-setup/desktop.png'
+
+# Introduction
+
+I wanted a Linux desktop that's light, easy to customise, and set up the way I like without spending a whole day on it after every reinstall.
+
+What I ended up with is Fedora as the base, Umbriel as the window manager, Noctalia as the desktop shell, and Noctalia Greeter as the login screen.
+
+The first time, I did everything by hand and wrote it down. That's this post. Afterwards I put all of it into an installer in my [dotfiles](https://github.com/r3p-dev/dotfiles), so now a fresh install becomes my desktop with one command. That's at the end.
+
+# The Pieces
+
+**Fedora.** Packages are recent, but a new release only comes about every six months, so I decide when the base system changes. Secure Boot works out of the box, which matters for the NVIDIA driver later.
+
+**Umbriel.** A scrolling window manager. New windows open in a row to the side instead of squeezing the ones already there, and I scroll through them. I first looked at Niri for that, but Umbriel has a scratchpad: a hidden spot for apps I open often but don't want sitting on my workspace. That's what made me pick it.
+
+**Noctalia.** The desktop shell: panel, launcher, notifications, wallpaper, clipboard history, system controls, all in one. It's by the same developer as Umbriel, so they fit together. Umbriel manages the windows, Noctalia manages everything around them.
+
+**Noctalia Greeter.** The login screen. It follows Noctalia's theme, so the look stays the same from login to desktop without me theming a separate login screen.
+
+# Minimal or Workstation
+
+The setup is meant for **Fedora Minimal**: start with almost nothing and install only what I use. No second desktop, no apps I'll delete anyway.
+
+Right now, though, I'm on **Fedora Workstation**. Umbriel is still young and changes a lot between builds, and I'm in the middle of my thesis. I can't lose a day because an update broke my window manager. With Workstation, GNOME stays installed as a second session, so if Umbriel breaks, I log into GNOME and keep working until it's fixed.
+
+Everything below works on both. The only differences are the first step and the login screen, and I'll point those out.
+
+# Starting from Minimal
+
+The Minimal install comes from the Fedora Everything ISO: in the installer, pick **Minimal Install** under software selection. It boots to a text login, with no desktop and no audio.
+
+So the first job is the base system that Workstation would normally include:
+
+```bash
+sudo dnf install \
+  pipewire pipewire-pulseaudio pipewire-alsa pipewire-utils wireplumber \
+  alsa-utils alsa-sof-firmware pavucontrol rtkit \
+  NetworkManager NetworkManager-wifi nss-mdns openssh-clients firewalld wireless-regdb \
+  bluez bluez-obexd linux-firmware fwupd upower tuned-ppd smartmontools dmidecode \
+  xorg-x11-server-Xwayland mesa-vulkan-drivers mesa-dri-drivers seatd qt6-qtwayland \
+  xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-utils polkit accountsservice \
+  unzip unrar xz dosfstools exfatprogs ntfs-3g gvfs gvfs-mtp \
+  google-noto-sans-fonts google-noto-serif-fonts google-noto-color-emoji-fonts \
+  dejavu-sans-fonts dejavu-sans-mono-fonts \
+  liberation-sans-fonts liberation-serif-fonts liberation-mono-fonts \
+  git curl wget rsync
+```
+
+Grouped, that's:
+
+- **Audio.** PipeWire, plus the firmware many laptops need for their sound card (`alsa-sof-firmware`).
+- **Network and Bluetooth.** NetworkManager with Wi-Fi, a firewall, and `nss-mdns` so `.local` names on my network resolve.
+- **Hardware.** Firmware, firmware updates (`fwupd`), battery info (`upower`), and power profiles (`tuned-ppd`, which Noctalia's power menu talks to).
+- **Desktop plumbing.** Graphics drivers, Xwayland, portals (file pickers and screen sharing for apps), and polkit for the password prompts when something needs admin rights.
+- **Disks and files.** Support for USB drives formatted as FAT, exFAT or NTFS, phones over MTP, and archives.
+- **Fonts.** Noto (including emoji), DejaVu and Liberation, so websites and documents don't fall back to something ugly.
+
+# Starting from Workstation
+
+Workstation already has all of that, plus GNOME and a full set of GNOME apps. I keep GNOME itself as the fallback, but remove the apps I never open:
+
+```bash
+sudo dnf remove gnome-software gnome-tour gnome-contacts gnome-clocks gnome-calendar \
+  gnome-weather gnome-maps gnome-boxes gnome-font-viewer gnome-characters \
+  gnome-system-monitor gnome-calculator gnome-text-editor gnome-connections \
+  gnome-user-docs mediawriter malcontent-control yelp ptyxis showtime loupe \
+  decibels papers papers-previewer papers-nautilus evince-djvu simple-scan \
+  'libreoffice*' fedora-workstation-repositories
+sudo dnf autoremove
+```
+
+Kitty replaces Ptyxis as the terminal, imv and mpv replace the image and video viewers, and I don't need LibreOffice. Nautilus stays as my file manager. `fedora-workstation-repositories` only adds a few third-party repo files (Chrome, Steam and so on) that I don't use.
+
+Doing this before updating means the update doesn't download new versions of apps I'm about to delete.
+
+# Updating
+
+```bash
+sudo dnf upgrade --refresh
+```
+
+# Extra Repositories
+
+Fedora's own repositories don't have everything. These are the ones I add, and what for:
+
+```bash
+# RPM Fusion: full codecs, and the NVIDIA driver
+sudo dnf install \
+  https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+  https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+
+# Terra: Umbriel, Noctalia, Noctalia Greeter, Starship
+sudo dnf install --nogpgcheck --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' terra-release
+
+# COPR: hyprpicker (color picker) and yazi (file manager in the terminal)
+sudo dnf copr enable lionheartp/Hyprland
+sudo dnf copr enable lihaohong/yazi
+
+# vendors: Brave, GitHub CLI, cloudflared
+sudo dnf config-manager addrepo --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
+sudo dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo
+sudo dnf config-manager addrepo --from-repofile=https://pkg.cloudflare.com/cloudflared.repo
+```
+
+VS Code's repo needs its key imported first, so it's a few more lines; Microsoft's [Linux setup page](https://code.visualstudio.com/docs/setup/linux) has them.
+
+The `--nogpgcheck` for Terra is only for that first package. `terra-release` installs Terra's signing key, and everything after it is checked as usual.
+
+# Codecs
+
+Fedora ships trimmed versions of ffmpeg and the Mesa video drivers, without the patented codecs like H.264 and H.265. The full versions are in RPM Fusion. They conflict with Fedora's versions, so they have to be swapped instead of installed:
+
+```bash
+sudo dnf swap ffmpeg-free ffmpeg --allowerasing
+sudo dnf swap mesa-va-drivers mesa-va-drivers-freeworld --allowerasing
+sudo dnf group upgrade multimedia --setopt="install_weak_deps=False" --exclude=PackageKit-gstreamer-plugin
+sudo dnf group upgrade sound-and-video
+```
+
+The Mesa one is what lets my laptop's AMD graphics decode video in hardware, so playing video doesn't eat the CPU and the battery.
+
+# Installing Everything
+
+Then the actual desktop and the tools I use every day:
+
+```bash
+sudo dnf install \
+  umbriel-nightly noctalia noctalia-greeter greetd xwayland-satellite \
+  kitty fish starship zoxide fastfetch yazi \
+  git curl wget rsync jq bc fd-find ripgrep fzf 7zip unzip translate-shell \
+  poppler-utils ImageMagick resvg git-filter-repo \
+  wl-clipboard slurp hyprpicker gpu-screen-recorder \
+  tesseract tesseract-langpack-eng tesseract-langpack-ind zbar \
+  imv mpv mpv-mpris gphoto2 udisks2 \
+  podman podman-compose gcc gcc-c++ make clang code gh cloudflared \
+  brave-origin gnome-keyring libsecret
+```
+
+Most of these are obvious. A few that aren't:
+
+- `xwayland-satellite` lets older X11 apps run under Umbriel, which is Wayland only.
+- `slurp`, `hyprpicker`, `gpu-screen-recorder`, `tesseract` and `zbar` are for Noctalia's screen toolkit plugin. One key (`Print`) gives me screenshots, screen recording, a colour picker, text recognition from a selected area (English and Indonesian), and QR code scanning.
+- `gnome-keyring` and `libsecret` store passwords for apps like VS Code and Brave, so they don't ask me to log in again every time.
+- `podman` because I run my local databases in containers, the same way they run on my server.
+
+## NVIDIA and Secure Boot
+
+My laptop has an NVIDIA card next to the AMD graphics, and RPM Fusion has the driver. It's built locally for the kernel, and with Secure Boot on, the kernel only loads it if it's signed with a key the firmware trusts. Enrolling that key needs a reboot:
+
+```bash
+sudo dnf install akmods mokutil
+sudo kmodgenca -a
+sudo mokutil --import /etc/pki/akmods/certs/public_key.der
+sudo reboot
+```
+
+`mokutil` asks for a one-time password. After the reboot, a blue MOK Manager screen shows up: pick **Enroll MOK**, then **Continue**, and type that password. Back in Fedora:
+
+```bash
+sudo dnf install akmod-nvidia-open xorg-x11-drv-nvidia-cuda libva-nvidia-driver
+```
+
+I use the open kernel module (`-open`), which is what NVIDIA recommends for Turing cards and newer.
+
+Don't reboot right away. The driver builds in the background for a few minutes, and rebooting before it's done gives you a boot without a driver. `modinfo -F version nvidia` prints a version once it's ready.
+
+# The Login Screen
+
+The login screen is greetd running Noctalia Greeter:
+
+```bash
+sudo nano /etc/greetd/config.toml
+```
+
+```toml
+[terminal]
+vt = 1
+
+[default_session]
+command = "/usr/bin/noctalia-greeter-session -- --session umbriel"
+user = "greetd"
+```
+
+`--session umbriel` makes Umbriel the default. The `user` is the account greetd runs the greeter as, and on Fedora that account is called `greetd`. With the wrong name, greetd quits right away with "session user not found", and you get a black screen.
+
+```bash
+sudo chown -R greetd: /var/lib/noctalia-greeter
+sudo systemctl enable greetd
+```
+
+The greeter keeps its settings in `/var/lib/noctalia-greeter`, and it has to own that directory. Otherwise it's another black screen, even though `systemctl status greetd` says everything is fine.
+
+The last step depends on where you started:
+
+- **Workstation:** GNOME's login screen (GDM) is enabled, so turn it off with `sudo systemctl disable gdm`. GNOME itself stays installed as the fallback session.
+- **Minimal:** it boots to a text console by default, so greetd would never start. `sudo systemctl set-default graphical.target` fixes that.
+
+Before rebooting, test it from a TTY with `sudo systemctl start greetd`. If it shows up, reboot.
+
+# Shell and Dev Tools
+
+Fish is my shell, with Starship for the prompt and zoxide for jumping between directories:
+
+```bash
+sudo usermod -s /usr/bin/fish $USER
+```
+
+Node, Bun and Rust come from their own installers into my home directory instead of from dnf. Projects need different Node versions, and this way I can switch without `sudo`:
+
+```bash
+curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+curl -fsSL https://bun.sh/install | bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+```
+
+# Config Files
+
+Everything else is configuration, all of it in `~/.config`:
+
+- `umbriel/` has `config.toml` (look, animations, input, window rules) and `keybinds.toml`. `Super` alone opens the launcher, `Super+Return` opens Kitty, `Super+B` Brave, `Super+Y` yazi, and `Super+V` the clipboard history.
+- `noctalia/` has the shell config and my custom colour palette. Noctalia writes matching colours into Kitty's and Umbriel's themes, so everything uses the same palette.
+- `kitty/`, `yazi/`, `fastfetch/`, `fish/` and `starship.toml` are the terminal side.
+- `containers/systemd/postgres.container` is a Quadlet unit for a local PostGIS database, started by systemd like any other service.
+
+# All of It in One Command
+
+Doing it by hand once was useful, but I don't want to do it again. So everything above is in my dotfiles installer:
+
+```bash
+curl -fsSL https://dotfiles.r3p.dev/install.sh | bash
+```
+
+It runs the same steps in the same order. On Workstation it removes the apps first; on Minimal there's nothing to remove. Then it updates, installs the base system, adds the repositories, swaps the codecs, installs the packages and the NVIDIA driver, sets up greetd, Fish and the toolchains, and copies the config files into `~/.config`.
+
+Because of Secure Boot, it runs in two stages on my laptop: the first enrolls the key and reboots, and running it again after the MOK screen does the rest. On a machine without NVIDIA or Secure Boot it's one run.
+
+It downloads the repository to a temporary folder and deletes it afterwards, so nothing extra ends up in my home directory. If you want to run it yourself, read [the script](https://github.com/r3p-dev/dotfiles/blob/main/install.sh) first. It removes apps and adds repositories, and it's set up for my machine, not yours.
+
+# My Current Setup
+
+<BlogImage src={desktop} alt="Umbriel and Noctalia desktop" />
+
+Fedora underneath (Workstation for now, Minimal once Umbriel settles down and my thesis is done), Umbriel managing the windows, Noctalia for everything around them, Noctalia Greeter at login, and all of it rebuilt from one repository.
+
+That same repository also has [the script that sets up my VPS](/blogs/vps-setup-5), so both machines I use can be rebuilt from one place.
+
+# Conclusion
+
+I'm not after the most impressive-looking desktop. I want my computer to feel like mine when I turn it on: my shortcuts, my scratchpad, my colours. And when I reinstall, I want that back in one command instead of a whole afternoon.

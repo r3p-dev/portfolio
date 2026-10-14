@@ -1,16 +1,18 @@
 ---
-updatedAt: '2026-08-31'
+updatedAt: '2026-10-15'
 ---
 
 # Building
 
-Rebuilding this site in Astro, moving off the SvelteKit version. Most of the work is unglamorous (the SEO layer, the bilingual routing, the markdown pipeline), but it is the part that decides whether writing here stays pleasant.
+My thesis: an operations platform for UmimaClean, a shoe, bag, and helmet cleaning service in Bandung. It covers an order from the moment a customer books a pickup on their phone, through collection, inspection, itemised pricing, QRIS payment, cleaning, and delivery, and gives the owner one place to see the money and the workload behind it. AdonisJS, Inertia, React, and PostgreSQL. Most of the work is in the parts nobody sees: who claimed which pickup, prices that stay frozen once quoted, and a record of which staff member did what, and when.
 
-Kapturae is the other thing taking time. A browser-only photobooth: capture, compose, export, nothing uploaded. The capture and export paths work; templates and print layout are still moving.
+[Kapturae](/projects/kapturae) reached 1.0. A photobooth that runs entirely in the browser: pick a frame, take the shots, decorate them, and export a 300 DPI print or an animated GIF, with nothing uploaded. It works offline once installed, in English and Indonesian.
 
 # Running
 
-A small VPS with rootless Podman and systemd user units. Everything I self-host lives there, deployed from GitHub Actions over SSH. Most of what I have written this year came out of running it and finding out what actually breaks.
+A small Debian 13 VPS, set up by [one script](/blogs/vps-setup-5) that now lives in my [dotfiles](https://github.com/r3p-dev/dotfiles): rootless Podman, Quadlet units generated from each repo's `compose.yaml`, and Traefik in front with automatic HTTPS. A `git push` builds the image in GitHub Actions, the server deploys it, waits until it is healthy, and rolls back if it is not. This site runs there.
+
+On the desktop, [Fedora Workstation with Umbriel and Noctalia](/blogs/my-fedora-setup), rebuilt from my dotfiles with one command.
 
 # Learning
 

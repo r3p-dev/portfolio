@@ -16,7 +16,11 @@ for await (const file of new Glob('dist/**/*.html').scan()) {
 }
 
 const policy = [
-  "default-src 'none'",
+  "default-src 'self'",
+  "object-src 'none'",
+  "frame-src 'none'",
+  "worker-src 'none'",
+  "media-src 'none'",
   `script-src 'self' ${[...found.script].join(' ')} https://static.cloudflareinsights.com`,
   `style-src 'self' ${[...found.style].join(' ')}`,
   "style-src-attr 'self' 'unsafe-inline'",

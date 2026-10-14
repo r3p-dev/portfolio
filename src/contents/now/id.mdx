@@ -1,16 +1,18 @@
 ---
-updatedAt: '2026-08-31'
+updatedAt: '2026-10-15'
 ---
 
 # Sedang Dibangun
 
-Membangun ulang situs ini dengan Astro, meninggalkan versi SvelteKit. Sebagian besar pekerjaannya tidak menarik (lapisan SEO, routing dua bahasa, pipeline markdown), tetapi justru bagian itulah yang menentukan apakah menulis di sini tetap menyenangkan.
+Skripsi saya: platform operasional untuk UmimaClean, jasa cuci sepatu, tas, dan helm di Bandung. Platform ini mencakup sebuah pesanan sejak pelanggan memesan penjemputan dari ponselnya, lalu penjemputan, inspeksi, harga per item, pembayaran QRIS, pencucian, sampai pengantaran, dan memberi pemilik satu tempat untuk melihat uang dan beban kerja di baliknya. AdonisJS, Inertia, React, dan PostgreSQL. Sebagian besar pekerjaannya ada di bagian yang tidak terlihat: siapa yang mengambil penjemputan yang mana, harga yang terkunci begitu sudah dikutip, dan catatan petugas mana yang mengerjakan apa, dan kapan.
 
-Kapturae adalah hal lain yang menyita waktu. Photobooth yang sepenuhnya berjalan di browser: ambil gambar, susun, ekspor, tanpa ada yang diunggah. Alur pengambilan dan ekspor sudah berjalan; template dan tata letak cetak masih berubah.
+[Kapturae](/id/projects/kapturae) sudah mencapai 1.0. Photobooth yang sepenuhnya berjalan di browser: pilih bingkai, ambil foto, hias, lalu ekspor cetakan 300 DPI atau GIF animasi, tanpa ada yang diunggah. Setelah dipasang, ia jalan tanpa koneksi, dalam bahasa Inggris dan Indonesia.
 
 # Sedang Dijalankan
 
-Sebuah VPS kecil dengan Podman rootless dan systemd user unit. Semua yang saya self-host ada di sana, dideploy dari GitHub Actions lewat SSH. Sebagian besar tulisan saya tahun ini lahir dari menjalankannya dan menemukan apa yang sebenarnya rusak.
+Sebuah VPS kecil dengan Debian 13, disiapkan oleh [satu skrip](/id/blogs/vps-setup-5) yang sekarang ada di [dotfiles](https://github.com/r3p-dev/dotfiles) saya: Podman rootless, unit Quadlet yang dibuat dari `compose.yaml` tiap repo, dan Traefik di depan dengan HTTPS otomatis. Sebuah `git push` membangun image di GitHub Actions, server men-deploy-nya, menunggu sampai sehat, dan me-rollback kalau tidak. Situs ini berjalan di sana.
+
+Di desktop, [Fedora Workstation dengan Umbriel dan Noctalia](/id/blogs/my-fedora-setup), dibangun ulang dari dotfiles saya dengan satu perintah.
 
 # Sedang Dipelajari
 

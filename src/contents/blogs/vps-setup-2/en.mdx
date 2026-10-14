@@ -1,345 +1,161 @@
 ---
 title: 'How to Set Up a VPS for Beginners, from a Beginner (Part 2: Firewall, Bans, and Automatic Updates)'
-description: Part 2 of setting up my first VPS on Debian 13 Minimal. The SSH port gotcha in Debian 13, swap, closing every port with ufw, banning repeat offenders with fail2ban, capping the journal, and letting security patches apply themselves.
+description: Part 2 of setting up my first VPS on Debian 13. An nftables firewall, fail2ban with a repeat-offender jail, automatic security updates, zram swap, kernel tuning, and capped logs.
 date: '2026-05-21'
+updated: '2026-10-15'
 tags: [vps, debian, server, security, firewall, linux]
 ---
 
 > **A 5-part series.**
 >
-> · [Part 1 — Securing the Base System](/blogs/vps-setup-part-1)
->
-> · **Part 2 — Firewall & Bans**
->
-> · [Part 3 — Rootless Podman](/blogs/vps-setup-part-3)
->
-> · [Part 4 — Caddy & HTTPS](/blogs/vps-setup-part-4)
->
-> · [Part 5 — Deploying Your App](/blogs/vps-setup-part-5)
+> - [Part 1: Securing the Base System](/blogs/vps-setup-1)
+> - **Part 2: Firewall, Bans & Updates**
+> - [Part 3: Rootless Podman](/blogs/vps-setup-3)
+> - [Part 4: Traefik & HTTPS](/blogs/vps-setup-4)
+> - [Part 5: Deploying, and One Script for All of It](/blogs/vps-setup-5)
 
-# Where This Continues From
+# Where We Are
 
-[Part 1](/blogs/vps-setup-part-1) took a fresh Debian 13 Minimal install and gave it some boundaries: system updated, SSH keys instead of passwords, a normal user instead of root, and a hardened `sshd_config`.
+[Part 1](/blogs/vps-setup-1) locked down the login: one user, keys only, no root.
 
-All of that was about the login layer. Every other port on the machine is still open, nothing is watching for repeated failed attempts, and security updates only happen when I remember to run them.
-
-This part is the boring middle. No application appears at the end of it. But it decides whether the server stays stable once something real is running.
-
-# A Debian 13 Detail That Bit Me
-
-First, the thing that confused me for twenty minutes at the end of Part 1.
-
-I changed `Port 22022` in `/etc/ssh/sshd_config`, restarted SSH, and the server kept answering on port 22 and ignoring 22022 entirely.
-
-Debian 13 uses socket activation for SSH by default. systemd holds the listening socket rather than `sshd`, so the `Port` directive is never consulted and restarting `ssh.service` changes nothing.
-
-Check which situation you are in:
-
-```bash
-systemctl is-enabled ssh.socket
-```
-
-```output
-enabled
-```
-
-`enabled` means socket activation is in charge. `disabled` or `Failed to get unit file state` means it is not, and your problem is elsewhere. The simplest fix is to hand the port back to `sshd`:
-
-```bash
-sudo systemctl disable --now ssh.socket
-sudo systemctl enable --now ssh.service
-```
-
-```output
-Removed "/etc/systemd/system/sockets.target.wants/ssh.socket".
-Created symlink '/etc/systemd/system/multi-user.target.wants/ssh.service' → '/usr/lib/systemd/system/ssh.service'.
-```
-
-Now `sshd` binds the port itself and the `Port 22022` line from Part 1 takes effect.
-
-If you would rather keep socket activation, tell the socket instead:
-
-```bash
-sudo systemctl edit ssh.socket
-```
-
-```ini
-[Socket]
-ListenStream=
-ListenStream=22022
-```
-
-The empty `ListenStream=` clears the inherited value of port 22. Without it you end up listening on both, which defeats the point.
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart ssh.socket
-```
-
-Either way, verify before trusting it:
-
-```bash
-sudo ss -tlnp | grep ssh
-```
-
-```output
-LISTEN 0  128  0.0.0.0:22022  0.0.0.0:*  users:(("sshd",pid=1284,fd=3))
-LISTEN 0  128     [::]:22022     [::]:*  users:(("sshd",pid=1284,fd=3))
-```
-
-Two lines, both on 22022, IPv4 and IPv6. What you must not see is a line ending in `:22`. If one is still there, something is holding the old port and you are about to lock yourself out.
-
-Same habit as before: keep your current SSH session open while testing the new one from a second terminal. I have needed that open session more than once.
-
-```bash
-ssh -p 22022 admin@IP_VPS
-```
-
-```output
-Linux my-vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-admin@my-vps:~$
-```
-
-# Naming and Time
-
-Two small things that cost nothing and pay for themselves later.
-
-The hostname shows up in your prompt, in logs, and in any alert the system sends. A server called `debian` tells you nothing six months from now:
-
-```bash
-sudo hostnamectl set-hostname my-vps
-```
-
-The timezone matters more than it looks. Every log line, every ban, every scheduled job gets stamped with it, and converting in your head every time is a small tax you keep paying:
-
-```bash
-sudo timedatectl set-timezone Asia/Jakarta
-```
-
-Then check the clock is actually synchronised:
-
-```bash
-timedatectl status
-```
-
-```output
-               Local time: Thu 2026-05-21 16:20:33 WIB
-           Universal time: Thu 2026-05-21 09:20:33 UTC
-                 Time zone: Asia/Jakarta (WIB, +0700)
-System clock synchronized: yes
-              NTP service: active
-```
-
-You want `System clock synchronized: yes`. A drifting clock quietly breaks TLS certificate validation, and that failure wastes an afternoon because it looks like something else entirely.
-
-# Adding Swap
-
-Most cheap VPS plans come with 1–2 GB of RAM and no swap. For serving traffic that is usually fine. For building anything it is not.
-
-I found this out when a Node build got killed partway through with no useful error. The kernel's OOM killer had terminated it, and nothing in the build output said so. You have to go looking:
-
-```bash
-sudo dmesg | grep -i "killed process"
-```
-
-```output
-[ 2451.882194] Out of memory: Killed process 8231 (node) total-vm:2185432kB,
-               anon-rss:743128kB, file-rss:0kB, shmem-rss:0kB, UID:1000
-```
-
-An empty result here means your build failed for some other reason.
-
-Swap does not make a server fast. It lets the machine survive short memory spikes instead of killing whatever caused them, which is enough.
-
-Create a 2 GB swap file:
-
-```bash
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-```
-
-```output
-Setting up swapspace version 1, size = 2 GiB (2147479552 bytes)
-no label, UUID=4f8c2a19-6b3d-4e7f-9a12-c5d8e0f34b76
-```
-
-Only `mkswap` prints anything. `swapon` succeeding in silence is the good outcome. If the `chmod` had been missed it would complain here instead:
-
-```output
-swapon: /swapfile: insecure permissions 0644, 0600 suggested.
-```
-
-The `chmod 600` is not optional, because that file holds whatever memory got paged out to it, which can include secrets.
-
-Make it survive a reboot:
-
-```bash
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
-
-```output
-/swapfile none swap sw 0 0
-```
-
-`tee` echoing the line back is how you know it was written. Run this twice and you get a duplicate entry in `/etc/fstab`, so check before repeating it.
-
-Then tell the kernel to prefer RAM and only reach for swap under real pressure:
-
-```bash
-echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
-sudo sysctl --system
-```
-
-```output
-vm.swappiness=10
-* Applying /etc/sysctl.d/99-swappiness.conf ...
-vm.swappiness = 10
-* Applying /etc/sysctl.conf ...
-```
-
-```bash
-free -h
-```
-
-```output
-               total        used        free      shared  buff/cache   available
-Mem:           957Mi       184Mi       412Mi       0.0Ki       498Mi       773Mi
-Swap:          2.0Gi          0B       2.0Gi
-```
-
-The `Swap` row existing at all is the result. `0B` used is correct and expected, since swap is insurance rather than something you want in constant use.
+Everything else is still wide open. Any program that listens on a port can be reached from the whole internet, nobody is watching the failed logins pile up, and security patches only land when I remember to run `apt`. This part fixes that. Nothing visible comes out of it, but it's what makes the server safe to leave alone.
 
 # The Firewall
 
-SSH is locked down, but SSH was never the only way in. Anything that binds a port on this machine is reachable from the whole internet unless something says otherwise.
+The idea is simple: block everything coming in, then allow only what needs to be reachable. That's SSH, plus 80 and 443 for the web server later. If I ever start something on another port by mistake, nobody outside can reach it.
 
-I went with the model that is easiest to reason about: deny everything inbound, then allow the specific things that need to exist. With that default, a service accidentally exposed on some port is simply unreachable rather than quietly public.
-
-`ufw` was already installed in Part 1. Set the defaults first:
+I used nftables directly. It's the firewall Debian uses under the hood anyway, tools like `ufw` are a layer on top of it, and with nftables the whole ruleset is one file I can read top to bottom and check before loading.
 
 ```bash
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
+sudo apt install -y nftables
+sudo nano /etc/nftables.conf
+```
+
+Replace the whole file with this. Use your own SSH port from Part 1:
+
+```text
+#!/usr/sbin/nft -f
+
+table inet vps_filter
+delete table inet vps_filter
+
+table inet vps_filter {
+  chain input {
+    type filter hook input priority filter; policy drop;
+
+    ct state established,related accept
+    ct state invalid drop
+    iif "lo" accept
+
+    icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+    icmp type echo-request limit rate 5/second burst 10 packets accept
+    icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, mld-listener-query } accept
+    icmpv6 type echo-request limit rate 5/second burst 10 packets accept
+    ip6 saddr fe80::/10 udp dport 546 accept
+
+    tcp dport 22022 accept comment "ssh"
+    tcp dport { 80, 443 } accept comment "http, https"
+    udp dport 443 accept comment "http/3"
+  }
+
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}
+```
+
+Reading it from the top:
+
+- `policy drop` on `input` is the "block everything" part. The rules below are the exceptions.
+- `established,related` lets replies come back to connections the server started itself, like `apt` downloading packages. Without it, nothing works.
+- `lo` is the loopback interface, so programs on the server can talk to each other.
+- The ICMP lines keep the parts of ping and error reporting that the network needs to work properly (path MTU discovery, IPv6 neighbour discovery) and rate-limit actual pings.
+- The `fe80::/10` line lets DHCPv6 replies in. Some providers hand out IPv6 that way.
+- Then SSH, HTTP and HTTPS over TCP, and 443 over UDP. That last one is for HTTP/3, which runs over UDP. Without it, HTTPS still works and HTTP/3 just never kicks in.
+
+The two lines before the table look weird. The first creates the table if it doesn't exist, the second deletes it, and then the block recreates it. This makes the file safe to load again and again, and it only ever touches my own table. Debian's original file starts with `flush ruleset` instead, which wipes **every** table on the machine. That matters once fail2ban adds its own table below.
+
+Check the file before loading it:
+
+```bash
+sudo nft -c -f /etc/nftables.conf
+```
+
+No output means the syntax is fine. It doesn't mean the rules are right, though, so read your SSH port one more time. If it's wrong, the next command locks you out. Keep your session open, same as in Part 1.
+
+```bash
+sudo systemctl enable --now nftables
+sudo nft list table inet vps_filter
 ```
 
 ```output
-Default incoming policy changed to 'deny'
-(be sure to update your rules accordingly)
-Default outgoing policy changed to 'allow'
-(be sure to update your rules accordingly)
+table inet vps_filter {
+	chain input {
+		type filter hook input priority filter; policy drop;
+		...
+		tcp dport 22022 accept comment "ssh"
+		tcp dport { 80, 443 } accept comment "http, https"
+		udp dport 443 accept comment "http/3"
+	}
+	...
+}
 ```
 
-Now the part where order matters. Allow your SSH port before enabling the firewall, or `ufw` will lock you out of your own server instantly and without asking:
+From now on, after editing the file, use `reload`, never `restart`:
 
 ```bash
-sudo ufw allow 22022/tcp comment 'SSH'
+sudo systemctl reload nftables
 ```
 
-```output
-Rule added
-Rule added (v6)
-```
+Stopping `nftables.service` runs `flush ruleset`. A restart would throw away fail2ban's bans along with everything else.
 
-Then the web ports, which later parts need:
+## Containers Can't Get Around It
 
-```bash
-sudo ufw allow 80/tcp comment 'HTTP'
-sudo ufw allow 443/tcp comment 'HTTPS'
-sudo ufw allow 443/udp comment 'HTTP/3 QUIC'
-```
+People running Docker get bitten by this: Docker writes its own firewall rules, and a published container port ends up reachable even though the firewall says it's blocked.
 
-That last one is for HTTP/3. HTTPS works fine without it, but QUIC runs over UDP, so leaving it out silently disables HTTP/3 while everything still appears to work.
-
-```bash
-sudo ufw enable
-```
-
-```output
-Command may disrupt existing ssh connections. Proceed with operation (y|n)? y
-Firewall is active and enabled on system startup
-```
-
-That warning is not boilerplate. It is asking whether you are sure the rule above exists.
-
-Read back what you actually created, rather than what you meant to create:
-
-```bash
-sudo ufw status numbered
-```
-
-```output
-Status: active
-
-     To                         Action      From
-     --                         ------      ----
-[ 1] 22022/tcp                  ALLOW IN    Anywhere                   # SSH
-[ 2] 80/tcp                     ALLOW IN    Anywhere                   # HTTP
-[ 3] 443/tcp                    ALLOW IN    Anywhere                   # HTTPS
-[ 4] 443/udp                    ALLOW IN    Anywhere                   # HTTP/3 QUIC
-[ 5] 22022/tcp (v6)             ALLOW IN    Anywhere (v6)              # SSH
-[ 6] 80/tcp (v6)                ALLOW IN    Anywhere (v6)              # HTTP
-[ 7] 443/tcp (v6)               ALLOW IN    Anywhere (v6)              # HTTPS
-[ 8] 443/udp (v6)               ALLOW IN    Anywhere (v6)              # HTTP/3 QUIC
-```
-
-Eight entries for four rules, because each one is written twice, once for IPv4 and once for IPv6. Those `# SSH` comments are why the `comment` flag was worth typing. A year from now this listing still explains itself.
-
-Rules can be removed by number if one is wrong:
-
-```bash
-sudo ufw delete 3
-```
-
-```output
-Deleting:
- allow 443/tcp comment 'HTTPS'
-Proceed with operation (y|n)? y
-Rule deleted
-```
-
-Deleting renumbers everything below it, so re-run `status numbered` between deletions rather than working from a stale list.
-
-## Why This Firewall Actually Holds
-
-There is a well-known gotcha where Docker writes its own `iptables` rules and publishes container ports straight past `ufw`. You add a firewall rule, it reads correctly, and the container is exposed anyway. People lose databases to this.
-
-Rootless Podman, which [Part 3](/blogs/vps-setup-part-3) sets up, does not behave that way. It runs as a normal user, so it has no privilege to rewrite the host firewall. Published ports are handled in userspace and arrive as ordinary traffic on the host, which means `ufw` sees them like anything else.
-
-This is one of those advantages that never shows up in feature comparisons but genuinely reduces the number of ways you can be wrong. I wrote more about the trade-off in [Why I Chose Podman Over Docker](/blogs/why-podman-over-docker).
+That won't happen here. The containers in [Part 3](/blogs/vps-setup-3) are rootless, so they run as a normal user who isn't allowed to touch the firewall at all. These rules are the only ones that exist.
 
 # Fail2ban
 
-The firewall controls which ports are open. It has no opinion about what happens on the ports that are open.
+The firewall decides which ports are open. It doesn't care what happens on them. Port 22022 has to accept connections from anyone, so anyone can keep trying.
 
-Port 22022 has to accept connections from anywhere, so anyone can keep knocking forever. `fail2ban` watches the logs and temporarily bans addresses that fail repeatedly.
-
-Worth being honest about what this buys you. With password authentication disabled in Part 1, brute force is not really a threat, since nobody guesses an Ed25519 key. So `fail2ban` is not what keeps attackers out here. What it buys is quieter logs, and logs you can read are logs where you will notice something unusual.
-
-One dependency first. The journal backend below is a Python binding rather than something `fail2ban` implements itself:
+With passwords disabled, nobody is going to guess their way in. What fail2ban gives me is quieter logs. It watches for repeated failures and bans the address for a while.
 
 ```bash
-sudo apt install -y python3-systemd
+sudo apt install -y fail2ban python3-systemd
 ```
 
-It comes in through Recommends, so a normal `apt install fail2ban` already has it. If you installed with `--no-install-recommends`, or inherited an image where someone did, the jail fails to initialise and only says so in the service log:
+`python3-systemd` lets fail2ban read the systemd journal. Debian 13 doesn't write SSH logins to `/var/log/auth.log` anymore, so without it the SSH jail has nothing to watch.
 
-```output
-Failed to initialize any backend for Jail 'sshd'
-```
-
-Never edit `jail.conf` directly, since package updates overwrite it. Create your own override:
+First, make sure fail2ban writes its own log to a file. The repeat-offender jail below reads it:
 
 ```bash
-sudo nano /etc/fail2ban/jail.local
+sudo nano /etc/fail2ban/fail2ban.d/90-local.local
+```
+
+```ini
+[Definition]
+logtarget = /var/log/fail2ban.log
+```
+
+Then the jails. I never edit `jail.conf` directly, because package updates replace it:
+
+```bash
+sudo nano /etc/fail2ban/jail.d/90-local.local
 ```
 
 ```ini
 [DEFAULT]
 backend = systemd
-banaction = ufw
+banaction = nftables-multiport
+banaction_allports = nftables-allports
 bantime = 1h
+bantime.increment = true
+bantime.maxtime = 1w
 findtime = 10m
 maxretry = 5
 ignoreip = 127.0.0.1/8 ::1
@@ -347,19 +163,33 @@ ignoreip = 127.0.0.1/8 ::1
 [sshd]
 enabled = true
 port = 22022
+mode = aggressive
+
+[recidive]
+enabled = true
+backend = auto
+logpath = /var/log/fail2ban.log
+banaction = %(banaction_allports)s
+bantime = 1w
+findtime = 1d
+maxretry = 3
 ```
 
-Line by line:
+What it does:
 
-- `backend = systemd` reads from the journal instead of a log file. Debian 13 does not ship a traditional `/var/log/auth.log`, so a file-based backend would sit there watching nothing and reporting no problems.
-- `banaction = ufw` writes bans as `ufw` rules. The default, `iptables-multiport`, works, but the bans are then invisible to `sudo ufw status`, which is the command you will instinctively run when working out why an address cannot connect.
-- `bantime = 1h` is how long a ban lasts.
-- `findtime` and `maxretry` together mean five failures within ten minutes triggers it.
-- `ignoreip` keeps localhost from being banned. If you have a static IP at home, adding it here is cheap insurance against banning yourself.
-- `port = 22022` must match your actual SSH port. This is the line people forget, and the jail then watches the wrong port while looking perfectly healthy.
+- Five failures within ten minutes gets an address banned for an hour.
+- `bantime.increment` makes each new ban of the same address longer, up to a week.
+- `mode = aggressive` also counts the noisier failures, like clients that disconnect during key exchange. Most scanners do exactly that.
+- `recidive` watches fail2ban's own log. An address banned three times in a day gets blocked on **every** port for a week.
+- The bans are written as nftables rules, in a table of their own.
+- `port` has to match your real SSH port. Get it wrong and the jail looks healthy while watching the wrong port.
+
+Test the config, then start it:
 
 ```bash
-sudo systemctl enable --now fail2ban
+sudo fail2ban-client -t
+sudo systemctl enable fail2ban
+sudo systemctl restart fail2ban
 sudo fail2ban-client status sshd
 ```
 
@@ -375,9 +205,9 @@ Status for the jail: sshd
    `- Banned IP list:
 ```
 
-All zeros on day one. The line that matters is `Journal matches`. If that is empty, the jail is running and watching nothing at all, which looks identical to a jail that is working perfectly.
+All zeros on day one is normal. The line to check is `Journal matches`. If it's empty, the jail is running and watching nothing.
 
-Come back to that command in a day:
+A day later it looked like this:
 
 ```output
 Status for the jail: sshd
@@ -391,79 +221,202 @@ Status for the jail: sshd
    `- Banned IP list:   45.148.10.92 92.63.197.14 141.98.11.72 ...
 ```
 
-That traffic was always there. You just could not see it before.
+847 failed attempts on a server nobody knows about, on a non-standard port. That traffic was there from the start; now I can see it.
+
+And this is why the firewall file only manages its own table:
+
+```bash
+sudo nft list tables
+```
+
+```output
+table inet vps_filter
+table inet f2b-table
+```
+
+My rules and fail2ban's bans live side by side, and reloading mine leaves fail2ban's alone.
 
 # Automatic Security Updates
 
-Everything above is a one-time setup. Patching is not, and the honest problem is that I will not remember to do it every week.
-
-So I made the machine do it:
+I'm not going to remember to patch this every week, so the server does it itself:
 
 ```bash
-sudo apt install -y unattended-upgrades apt-listchanges
-sudo dpkg-reconfigure -plow unattended-upgrades
+sudo apt install -y unattended-upgrades apt-listchanges needrestart
+sudo nano /etc/apt/apt.conf.d/20auto-upgrades
 ```
 
-The second command opens a full-screen dialog with one question:
-
-```output
- ┌─────────────────┤ Configuring unattended-upgrades ├──────────────────┐
- │ Automatically download and install stable updates?                   │
- │                                                                      │
- │                    <Yes>                    <No>                     │
- └──────────────────────────────────────────────────────────────────────┘
+```text
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
 ```
 
-Answer `<Yes>`.
+That turns it on: refresh the package lists daily, install updates daily, clean the download cache weekly.
 
-By default this only applies security updates, which is the right trade-off. Automatic upgrades of everything would risk a breaking change landing at 3 AM with nobody watching. Security patches are the ones where waiting is worse than applying.
-
-One setting worth turning on:
+The settings go in their own file, so package updates don't overwrite them:
 
 ```bash
-sudo nano /etc/apt/apt.conf.d/50unattended-upgrades
+sudo nano /etc/apt/apt.conf.d/52unattended-upgrades-local
 ```
 
 ```text
 Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+Unattended-Upgrade::SyslogEnable "true";
 ```
 
-Old kernels accumulate in `/boot`, and on a VPS with a small boot partition they will eventually fill it. That failure is confusing when it happens, because it presents as a broken `apt` rather than a full disk.
+By default, Debian only installs updates from the security repository, so a big version change won't land by itself at night.
 
-Force a dry run to confirm it works, instead of waiting a day to find out:
+Removing old kernels keeps `/boot` from filling up. When it does fill up, `apt` breaks, and it's not obvious why.
+
+The reboot settings are the part I thought about longest. A kernel security fix only takes effect after a reboot, and I won't do that on time if it's up to me. So when an update needs one, the server reboots at 4 AM. That's fine because everything I run comes back on its own afterwards, which [Part 3](/blogs/vps-setup-3) makes sure of.
+
+`needrestart` handles the other half. When a library like OpenSSL gets patched, programs that already loaded the old version keep using it until they restart. This tells needrestart to restart them automatically instead of asking:
+
+```bash
+sudo mkdir -p /etc/needrestart/conf.d
+echo "\$nrconf{restart} = 'a';" | sudo tee /etc/needrestart/conf.d/90-local.conf
+```
+
+Do a dry run instead of waiting a day to find out if it works:
 
 ```bash
 sudo unattended-upgrade --dry-run --debug
 ```
 
 ```output
-Initial blacklist:
-Initial whitelist (not strict):
 Starting unattended upgrades script
-Allowed origins are: origin=Debian,codename=trixie,label=Debian-Security
+Allowed origins are: origin=Debian,codename=trixie,label=Debian-Security, ...
 Packages that will be upgraded: libssl3t64 openssl
-Writing dpkg log to /var/log/unattended-upgrades/unattended-upgrades-dpkg.log
 ```
 
-Read the `Allowed origins` line: security only, as intended. If your list includes the plain `trixie` origin, this will upgrade everything unattended, which is not what you want at 3 AM.
+`Allowed origins` should list the security repository.
 
-This does not reboot for kernel updates. Automatic reboots are configurable, but I would rather do that one myself. A `sudo reboot` after checking nothing is mid-flight is a small price for not having the server restart during something important.
+# Swap in RAM with zram
 
-# Capping the Journal
+Most cheap VPS plans have 1 to 2 GB of RAM and no swap. When something uses too much memory, the kernel kills it, and the program usually doesn't get to say why.
 
-One more thing that costs nothing now and prevents a confusing afternoon later.
-
-Everything on this server logs to the journal, including every container from [Part 3](/blogs/vps-setup-part-3) onward. By default systemd lets that grow to 10% of the filesystem, which on a 25 GB disk is 2.5 GB of logs nobody will ever read.
+I used zram instead of a swap file. It's swap that lives in RAM, compressed. That sounds strange, but compressed memory still fits a lot more than it takes, and getting a page back from it is much faster than reading it from the VPS's network disk. It also doesn't wear out the disk.
 
 ```bash
-sudo nano /etc/systemd/journald.conf
+sudo apt install -y systemd-zram-generator
+sudo nano /etc/systemd/zram-generator.conf
+```
+
+```ini
+[zram0]
+zram-size = min(ram * 50 / 100, 8192)
+compression-algorithm = zstd
+swap-priority = 100
+```
+
+Half the RAM, capped at 8 GB, compressed with zstd.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start systemd-zram-setup@zram0.service
+swapon --show
+```
+
+```output
+NAME       TYPE      SIZE USED PRIO
+/dev/zram0 partition 979M   0B  100
+```
+
+Swapping to zram is cheap, so the kernel should use it readily. That's the opposite of the usual advice for disk swap:
+
+```bash
+printf 'vm.swappiness = 100\nvm.page-cluster = 0\n' | sudo tee /etc/sysctl.d/91-swap.conf
+```
+
+`page-cluster = 0` stops the kernel from reading several pages at once, which only helps on spinning disks.
+
+# Kernel and Network Settings
+
+The kernel has a lot of settings under `sysctl`. A handful are worth changing on a server facing the internet:
+
+```bash
+sudo nano /etc/sysctl.d/90-hardening.conf
+```
+
+```ini
+# don't accept tricks that reroute traffic
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_rfc1337 = 1
+
+# hide kernel details from normal users
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.unprivileged_bpf_disabled = 1
+net.core.bpf_jit_harden = 2
+kernel.yama.ptrace_scope = 1
+kernel.kexec_load_disabled = 1
+fs.protected_fifos = 2
+fs.protected_regular = 2
+fs.suid_dumpable = 0
+
+# faster TCP
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.core.somaxconn = 4096
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+vm.vfs_cache_pressure = 50
+```
+
+The first two groups are standard hardening. The server isn't a router, so it has no reason to accept redirects or source-routed packets, and normal users don't need kernel addresses, the kernel log, or other users' processes.
+
+The last group is about speed. BBR is a newer TCP congestion control from Google that copes much better with slow or lossy connections, like mobile data. It needs its module loaded at boot:
+
+```bash
+echo tcp_bbr | sudo tee /etc/modules-load.d/bbr.conf
+sudo modprobe tcp_bbr
+sudo sysctl --system
+sysctl net.ipv4.tcp_congestion_control
+```
+
+```output
+net.ipv4.tcp_congestion_control = bbr
+```
+
+# Capping the Logs
+
+Everything on this server logs to the systemd journal, including every container later on. By default it can grow to 10% of the disk, which nobody needs. I used a drop-in file instead of editing the main config:
+
+```bash
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo nano /etc/systemd/journald.conf.d/90-local.conf
 ```
 
 ```ini
 [Journal]
-SystemMaxUse=200M
+Storage=persistent
+Compress=yes
+SystemMaxUse=500M
+SystemKeepFree=1G
 MaxRetentionSec=1month
 ```
+
+`Storage=persistent` keeps logs across reboots, which matters once the server reboots itself at 4 AM. Then a cap of 500 MB, at least 1 GB always left free, and nothing older than a month.
 
 ```bash
 sudo systemctl restart systemd-journald
@@ -474,21 +427,21 @@ journalctl --disk-usage
 Archived and active journals take up 46.8M in the file system.
 ```
 
-Two hundred megabytes is far more history than a personal server needs, and it avoids a nasty failure. A full disk presents as containers refusing to start and `apt` breaking, with nothing pointing at the actual cause.
+While I was at it, I turned off core dumps. When a program crashes, a core dump saves its memory to disk, and that memory can contain passwords and keys. I'm not going to debug crashes from dumps on this server anyway:
+
+```bash
+sudo mkdir -p /etc/systemd/coredump.conf.d
+printf '[Coredump]\nStorage=none\nProcessSizeMax=0\n' | sudo tee /etc/systemd/coredump.conf.d/90-local.conf
+```
 
 # Where the Server Stands
 
-The machine has changed shape:
+After Part 2:
 
-- SSH answering on a non-default port, keys only, no root login
-- A default-deny firewall with exactly four ports open
-- Repeated failures getting banned automatically
-- Security patches applying on their own
-- Swap absorbing memory spikes instead of losing to the OOM killer
-- Logs capped so they cannot quietly fill the disk
+- Inbound traffic is blocked except SSH, 80 and 443.
+- Repeated SSH failures get banned, and repeat offenders get banned everywhere for a week.
+- Security updates install themselves, and the server reboots at 4 AM when a kernel fix needs it.
+- zram swap catches memory spikes, and the kernel is a bit stricter and a bit faster.
+- Logs can't fill the disk.
 
-None of that serves a single request. There is no application, no domain, no certificate. What there is, is a machine I can put something on without worrying about the foundation underneath it.
-
-# Next Part
-
-In [Part 3](/blogs/vps-setup-part-3), the server gets a way to actually run things: rootless Podman, the pieces Debian Minimal does not install for you, and the one setting that decides whether your containers survive logging out.
+Still nothing runs on it, though. [Part 3](/blogs/vps-setup-3) sets up rootless Podman so it can actually run something.

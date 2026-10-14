@@ -1,31 +1,30 @@
 ---
 title: 'How to Set Up a VPS for Beginners, from a Beginner (Part 1: Securing the Base System)'
-description: Part 1 of setting up my first VPS on Debian 13 Minimal. Initial access, system updates, SSH keys, a non-root user, and SSH hardening, before any services go on the box.
+description: Part 1 of setting up my first VPS on Debian 13. Updating, naming the server, one user with SSH keys and sudo, and an SSH config that only lets that user in.
 date: '2026-05-20'
+updated: '2026-10-15'
 tags: [vps, debian, server, ssh, security, linux]
 ---
 
 > **A 5-part series.**
 >
-> · **Part 1 — Securing the Base System**
->
-> · [Part 2 — Firewall & Bans](/blogs/vps-setup-part-2)
->
-> · [Part 3 — Rootless Podman](/blogs/vps-setup-part-3)
->
-> · [Part 4 — Caddy & HTTPS](/blogs/vps-setup-part-4)
->
-> · [Part 5 — Deploying Your App](/blogs/vps-setup-part-5)
+> - **Part 1: Securing the Base System**
+> - [Part 2: Firewall, Bans & Updates](/blogs/vps-setup-2)
+> - [Part 3: Rootless Podman](/blogs/vps-setup-3)
+> - [Part 4: Traefik & HTTPS](/blogs/vps-setup-4)
+> - [Part 5: Deploying, and One Script for All of It](/blogs/vps-setup-5)
 
 # Introduction
 
-A fresh VPS is clean and completely exposed at the same time. Nothing is configured, which also means nothing is protecting it. Whatever state it ends up in is down to what you do in the first hour.
+This is my first VPS. It's a small Debian 13 machine, and I want to run my own projects on it, starting with this website.
 
-I am not writing this as a set of instructions to follow exactly. It is a record of how I got a raw server into a state I was willing to build on.
+A fresh server has nothing configured, so nothing is protecting it either. I wanted to understand every step before trusting the box with anything, so I did all of it by hand and wrote it down as I went. That's this series.
+
+At the end I turned everything into one script, [`vps-setup.sh`](https://github.com/r3p-dev/dotfiles/blob/main/vps-setup.sh). If you only want the result, [Part 5](/blogs/vps-setup-5) shows how to run it. If you want to know what it's doing to your server, start here.
 
 # First Access
 
-The first connection is over SSH as root:
+The provider gives you an IP and a root login. Connect:
 
 ```bash
 ssh root@IP_VPS
@@ -35,78 +34,84 @@ ssh root@IP_VPS
 The authenticity of host 'IP_VPS (IP_VPS)' can't be established.
 ED25519 key fingerprint is SHA256:qL3nR8vT1wX5yZ0aB4cD7eF9gH2jK6mN8pQ1rS3tU5v.
 Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
-root@IP_VPS's password:
 
 Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
 root@vps:~#
 ```
 
-You get that fingerprint prompt once per server. If it shows up again later for a host you have already connected to, something about the machine answering you has changed, and it is worth finding out what before typing `yes`.
+The fingerprint question only comes up the first time. If it ever shows up again for the same server, something changed on the other end, and I'd want to know what before typing `yes`.
 
-Root has no restrictions at all, which is convenient for about ten minutes and then stops being a good idea. There is no separation between routine work and things that can break the system, so every command carries the same weight. Root access here is a way in, not the account I intend to keep using.
+I'm going to use root for the next few minutes and then never log in as root again.
 
 # Updating
 
-Even though the server was created minutes ago, its packages come from whatever base image the provider built it from. So the first thing is to update:
+The server was created from the provider's image, and that image is never fully up to date:
 
 ```bash
-apt update && apt upgrade -y
+apt update && apt full-upgrade -y
 ```
-
-> No `sudo` here, because we are still root. On a genuinely minimal Debian install `sudo` is not present yet. It gets installed in the next section.
 
 ```output
 Hit:1 http://deb.debian.org/debian trixie InRelease
 Get:2 http://security.debian.org/debian-security trixie-security InRelease [48.0 kB]
-Get:3 http://deb.debian.org/debian trixie-updates InRelease [55.4 kB]
-Fetched 103 kB in 1s (98.2 kB/s)
-Reading package lists... Done
-Building dependency tree... Done
-14 packages can be upgraded. Run 'apt list --upgradable' to see them.
 ...
 14 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
 ```
 
-Fourteen packages already out of date on a server that is minutes old. That is the reason this goes first.
+I use `full-upgrade` instead of `upgrade` because it's allowed to install or remove packages when an update needs it, like a new kernel package. Plain `upgrade` holds those back.
 
-# Choosing What to Install
-
-It is easy to install everything that looks useful at this point. I tried to keep it to things I would actually use for administering the box and running containers on it later:
+Then a few basics:
 
 ```bash
-apt install -y sudo curl git btop ufw fail2ban podman
+apt install -y sudo curl ca-certificates nano less
+```
+
+`sudo` comes first for a reason. Debian's minimal images don't include it, but the `sudo` group exists anyway, so adding a user to it works and prints nothing. If you then disable root login without the `sudo` command installed, there's no account left that can fix anything.
+
+Each later part installs what it needs when it needs it.
+
+# Name and Time
+
+Two small things. The hostname shows up in the prompt and in every log line, and `vps` or `debian` won't mean anything to me later:
+
+```bash
+hostnamectl set-hostname my-vps
+nano /etc/hosts
+```
+
+```text
+127.0.1.1	my-vps
+```
+
+That line in `/etc/hosts` should match the new name, otherwise `sudo` complains that it can't resolve the host.
+
+Some providers set the hostname on every boot with cloud-init. If yours does, this stops it from changing the name back:
+
+```bash
+echo 'preserve_hostname: true' > /etc/cloud/cloud.cfg.d/99-hostname.cfg
+```
+
+Then the timezone, so log times are in my time and not UTC:
+
+```bash
+timedatectl set-timezone Asia/Jakarta
+timedatectl set-ntp true
+timedatectl status
 ```
 
 ```output
-Reading package lists... Done
-Building dependency tree... Done
-The following additional packages will be installed:
-  catatonit conmon containers-storage crun golang-github-containers-common
-  libgpgme11t64 netavark passt uidmap
-Suggested packages:
-  containers-storage docker-compose
-0 upgraded, 34 newly installed, 0 to remove and 0 not upgraded.
-Need to get 41.2 MB of archives.
-After this operation, 168 MB of additional disk space will be used.
+               Local time: Wed 2026-05-20 16:20:33 WIB
+           Universal time: Wed 2026-05-20 09:20:33 UTC
+                 Time zone: Asia/Jakarta (WIB, +0700)
+System clock synchronized: yes
+              NTP service: active
 ```
 
-Worth glancing at that `additional packages` list rather than scrolling past it. Seven requested packages pulled in twenty-eight more. On a 25 GB disk that is fine, but it is a habit worth keeping.
+I want `System clock synchronized: yes`. A wrong clock breaks HTTPS certificates in confusing ways. If `NTP service` says `n/a`, the image came without a time client and `apt install -y systemd-timesyncd` fixes it.
 
-`sudo` is first in the list for a reason that caught me out. Debian Minimal does not ship it. The `sudo` **group** exists either way, so `usermod -aG sudo admin` further down succeeds and prints nothing whether or not the binary is there. Disable root login after that and you have no account left that can administer the machine. Install it now.
+# SSH Keys
 
-## Why Podman
-
-The obvious question is why `podman` and not `docker`, given Docker is still what most production environments run.
-
-It comes down to context. This is one machine I manage on my own, not part of a cluster. Podman runs containers without a daemon, so there is no central process that takes everything down with it when it dies. It also treats rootless as the normal mode rather than an opt-in, which suits a box that is newly exposed to the internet.
-
-Docker's ecosystem and tooling are more mature, and that is a real advantage in most teams. It also assumes a more complex operational setup than I have here. I picked Podman because it removes things I do not need yet, not because Docker is wrong.
-
-# Switching to SSH Keys
-
-Password login works, but passwords depend on human behaviour, which makes them guessable and reusable. On a public server that is a weak spot I would rather not keep.
-
-Generate a key pair:
+Passwords can be guessed. A key can't, at least not in any practical sense. So before anything else, I made a key on my laptop (not on the server):
 
 ```bash
 ssh-keygen -t ed25519 -C "vps-personal"
@@ -116,14 +121,11 @@ ssh-keygen -t ed25519 -C "vps-personal"
 Generating public/private ed25519 key pair.
 Enter file in which to save the key (/home/you/.ssh/id_ed25519):
 Enter passphrase for "/home/you/.ssh/id_ed25519" (empty for no passphrase):
-Enter same passphrase again:
 Your identification has been saved in /home/you/.ssh/id_ed25519
 Your public key has been saved in /home/you/.ssh/id_ed25519.pub
-The key fingerprint is:
-SHA256:7hJ2kL9mN4pQ6rS8tU0vW3xY5zA1bC7dE9fG2hI4jK6 vps-personal
 ```
 
-Two files. `id_ed25519` stays on this machine. `id_ed25519.pub` is the half you hand out.
+That gives two files. `id_ed25519` is private and never leaves the laptop. `id_ed25519.pub` is the one I give to servers:
 
 ```bash
 cat ~/.ssh/id_ed25519.pub
@@ -133,114 +135,50 @@ cat ~/.ssh/id_ed25519.pub
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH8kR2pQ7mZvN1xW4tYbL9cD0eF3gH5jK7lM2nP4qR6s vps-personal
 ```
 
-One line: key type, the key, and the comment from `-C`. If what you see starts with `-----BEGIN OPENSSH PRIVATE KEY-----`, that is the wrong file and it should never leave your machine.
+If what you see starts with `-----BEGIN OPENSSH PRIVATE KEY-----`, that's the wrong file.
 
-After this the server stops checking a password and starts checking whether the private key you hold matches the public key in `authorized_keys`. There is nothing left to brute force.
+I went with Ed25519 because the keys are short and fast and every modern OpenSSH supports them. RSA works too, but it has to be at least 2048 bits to be worth anything.
 
-# Installing the Key on the Server
+# One User for Everything
 
-The public key needs to end up in `~/.ssh/authorized_keys` on the server. You can do that by hand, but `ssh-copy-id` gets the permissions right in one line. Run it from your **local machine**:
+I don't want to work as root. I also don't want a pile of accounts. So the server gets exactly one normal user, and that user will do everything: log in, use `sudo`, and later own every container.
+
+Back on the server, as root:
 
 ```bash
-ssh-copy-id root@IP_VPS
+useradd --create-home --shell /bin/bash admin
+usermod -aG sudo,adm,systemd-journal admin
+passwd admin
 ```
 
 ```output
-/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/you/.ssh/id_ed25519.pub"
-/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
-/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
-root@IP_VPS's password:
-
-Number of key(s) added: 1
-
-Now try logging into the machine, with:   "ssh 'root@IP_VPS'"
-and check to make sure that only the key(s) you wanted were added.
-```
-
-It uses the password one last time, appends the key rather than overwriting what is there, and creates `~/.ssh` with the right modes.
-
-That last part is where manual installs usually go wrong. SSH will not use a key directory that other users can read, and it fails silently: you get a password prompt with no explanation. Check what landed:
-
-```bash
-ls -la ~/.ssh
-```
-
-```output
-drwx------ 2 root root 4096 May 20 09:22 .
-drwx------ 6 root root 4096 May 20 09:22 ..
--rw------- 1 root root  102 May 20 09:22 authorized_keys
-```
-
-`drwx------` is 700, `-rw-------` is 600. Owner only. If you ever install a key by hand and logins keep asking for a password, look here first.
-
-Confirm it works before going further:
-
-```bash
-ssh root@IP_VPS
-```
-
-```output
-Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-Last login: Wed May 20 09:18:44 2026 from 203.0.113.41
-root@vps:~#
-```
-
-Straight to a prompt, no password line. If you are still asked for one, the key is not being accepted, and it is almost always the permissions above.
-
-# Creating a User
-
-Running everything as root removes any boundary between ordinary work and system-level changes. So the next step is an account for day-to-day use:
-
-```bash
-adduser admin
-```
-
-```output
-info: Adding user `admin' ...
-info: Selecting UID/GID from range 1000 to 59999 ...
-info: Adding new group `admin' (1000) ...
-info: Adding new user `admin' (1000) with group `admin (1000)' ...
-info: Creating home directory `/home/admin' ...
-info: Copying files from `/etc/skel' ...
 New password:
 Retype new password:
 passwd: password updated successfully
-Changing the user information for admin
-Enter the new value, or press ENTER for the default
-	Full Name []:
-	Room Number []:
-...
-Is the information correct? [Y/n] Y
 ```
 
-Everything after the password can be left blank. Set the password even though logins will use keys, because `sudo` will ask for it.
+The groups:
 
-Then give it sudo:
+- `sudo` to run admin commands.
+- `adm` and `systemd-journal` to read system logs without typing `sudo` every time.
+
+The password is only for `sudo`. Logging in will be key-only in a few minutes.
+
+Check that `sudo` actually works for the new user before relying on it:
 
 ```bash
-usermod -aG sudo admin
-groups admin
-```
-
-```output
-admin : admin sudo
-```
-
-`usermod` prints nothing, so `groups` is how you check it worked.
-
-Group membership and a working `sudo` are not the same thing, and the gap only shows up once root login is gone. Test it from an `admin` shell now:
-
-```bash
-sudo -v
+su - admin -c 'sudo -v'
 ```
 
 ```output
 [sudo] password for admin:
 ```
 
-A prompt that accepts the password and drops you back to the shell is what you want. `sudo: command not found` means the package is missing, so go back and install it while root still works.
+If it asks for the password and accepts it, good. `sudo: command not found` means the package is missing, so go back and install it while root still works.
 
-The new account needs the same key. Same command, different target, still from your local machine:
+## Giving the User Your Key
+
+The public key has to go into `~/.ssh/authorized_keys` of the new user. From the laptop:
 
 ```bash
 ssh-copy-id admin@IP_VPS
@@ -253,133 +191,187 @@ admin@IP_VPS's password:
 Number of key(s) added: 1
 ```
 
-The password it asks for is the one from `adduser`. This is close to the last time it will be useful, since password authentication gets turned off in a moment and this command stops working entirely after that.
+It logs in with the password one last time and sets the right permissions on the files.
 
-You can copy `/root/.ssh/authorized_keys` across by hand instead, but it arrives owned by `root` and SSH ignores it. `ssh-copy-id` writes as the target user, so there is nothing to clean up.
+If your provider's image already has password logins turned off, that won't work. In that case, copy root's keys over on the server instead:
 
-Check the new account:
+```bash
+install -d -m 700 -o admin -g admin /home/admin/.ssh
+install -m 600 -o admin -g admin /root/.ssh/authorized_keys /home/admin/.ssh/authorized_keys
+```
+
+`install` creates the files with the right owner and mode in one go. A plain `cp` would leave them owned by root, and SSH silently ignores a key file that the user doesn't own.
+
+Test it from the laptop:
 
 ```bash
 ssh admin@IP_VPS
 ```
 
 ```output
-Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-admin@vps:~$
+Linux my-vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
+admin@my-vps:~$
 ```
 
-The prompt ends in `$` instead of `#`. That is the shell telling you it is not root.
+No password prompt, and the prompt ends in `$`, not `#`. That's a normal user logged in with a key.
 
-# Reducing Exposure
+# Locking Down SSH
 
-The system works, but it is still open in ways automated attacks routinely target. Time to close some of that off:
-
-```bash
-nano /etc/ssh/sshd_config
-```
-
-Change the port. This does not add real security on its own, but it cuts down the noise from bots scanning port 22:
-
-```text
-Port 22022
-```
-
-Turn off password authentication:
-
-```text
-PasswordAuthentication no
-PubkeyAuthentication yes
-```
-
-And disable root login, so a compromised account cannot immediately operate with full privileges:
-
-```text
-PermitRootLogin no
-```
-
-Those last two are the meaningful ones. They remove the entry points automated SSH attacks actually use.
-
-## The Include Line at the Top of That File
-
-Before restarting anything, scroll to the top of `sshd_config`. Debian puts this there:
+Now the actual hardening. Debian's main config is `/etc/ssh/sshd_config`, but I didn't edit it. At the top of that file is this line:
 
 ```text
 Include /etc/ssh/sshd_config.d/*.conf
 ```
 
-`sshd` resolves conflicts by taking the **first** value it finds, not the last. So anything in that directory beats what you just wrote further down. Plenty of VPS images ship a `50-cloud-init.conf` containing exactly the setting you came to change:
+`sshd` uses the **first** value it finds for each setting, and the included files are read first, in alphabetical order. Lots of VPS images ship a `50-cloud-init.conf` in there with `PasswordAuthentication yes`. Any change you make further down in the main file loses to it.
+
+So I put my settings in a file that sorts before everything else:
 
 ```bash
-ls /etc/ssh/sshd_config.d/
-cat /etc/ssh/sshd_config.d/*.conf
+sudo nano /etc/ssh/sshd_config.d/00-hardening.conf
 ```
 
-```output
-50-cloud-init.conf
-PasswordAuthentication yes
+```text
+Port 22022
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AllowUsers admin
+
+MaxAuthTries 3
+MaxSessions 4
+LoginGraceTime 20
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+PermitUserEnvironment no
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding local
+AllowStreamLocalForwarding no
+GatewayPorts no
+PermitTunnel no
+UseDNS no
+LogLevel VERBOSE
+
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
 ```
 
-Your edit is saved, correct, and doing nothing. Delete that file or edit it instead. A drop-in of your own that sorts before it by name also works.
+That's a lot, so briefly:
 
-Rather than working out the precedence in your head, ask `sshd` what it resolved to:
+- **Port 22022.** Not real security, but bots hammer port 22 all day and this cuts the noise in the logs.
+- **No root, no passwords, keys only, and only `admin`.** These are the lines that matter most. `AllowUsers` means even if another account appears on the server someday, it can't log in over SSH.
+- **`MaxAuthTries`, `LoginGraceTime`.** Give up quickly on connections that aren't getting anywhere.
+- **Forwarding.** I turned off everything except `AllowTcpForwarding local`, so I can still do `ssh -L` to reach a database on the server from my laptop.
+- **`LogLevel VERBOSE`** logs the fingerprint of the key used for each login, so I can see which key got in.
+- **Crypto.** Only modern key exchange, ciphers and MACs. The first key exchange, `mlkem768x25519-sha256`, is post-quantum and new in OpenSSH 10, which Debian 13 ships. I dropped the ECDSA host key and kept Ed25519 plus RSA for older clients.
+
+If you're on a different OpenSSH version, check what it supports before copying those last lines:
 
 ```bash
-sudo sshd -T | grep -Ei '^(port|passwordauthentication|permitrootlogin|pubkeyauthentication)'
+ssh -Q kex
+```
+
+Before restarting anything, test the file. A syntax error here and SSH won't come back:
+
+```bash
+sudo sshd -t
+```
+
+No output means it's fine. Then ask `sshd` what it will actually use, after all the included files:
+
+```bash
+sudo sshd -T | grep -Ei '^(port|permitrootlogin|passwordauthentication|allowusers) '
 ```
 
 ```output
 port 22022
 permitrootlogin no
-pubkeyauthentication yes
 passwordauthentication no
+allowusers admin
 ```
 
-That is the effective config after every include is processed, and it is the only reading of this file I trust. `sshd -T` also refuses to print anything if the syntax is broken, which is a free validity check before restarting the service you are connected through.
+That's the effective config, and it's the only view of it I trust. If `passwordauthentication` says `yes` here, some other file is winning.
 
-Restart it:
+## The Port Has to Change in Two Places
+
+This one got me. Debian 13 can start SSH through a systemd socket, and when it does, systemd opens the port, not `sshd`. The `Port` line above gets ignored. Mine was set up that way:
+
+```bash
+systemctl is-enabled ssh.socket
+```
+
+```output
+enabled
+```
+
+If you see `enabled` too, tell the socket about the new port:
+
+```bash
+sudo mkdir -p /etc/systemd/system/ssh.socket.d
+sudo nano /etc/systemd/system/ssh.socket.d/port.conf
+```
+
+```ini
+[Socket]
+ListenStream=
+ListenStream=22022
+```
+
+The empty `ListenStream=` clears the default port 22. Without it, it listens on both.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ssh.socket
+```
+
+If it said `disabled`, `sshd` opens the port itself and restarting it is enough:
 
 ```bash
 sudo systemctl restart ssh
-sudo systemctl status ssh
+```
+
+Either way, check what's listening:
+
+```bash
+sudo ss -tlnp | grep 22022
 ```
 
 ```output
-● ssh.service - OpenBSD Secure Shell server
-     Loaded: loaded (/usr/lib/systemd/system/ssh.service; enabled; preset: enabled)
-     Active: active (running) since Wed 2026-05-20 09:41:02 UTC; 4s ago
-   Main PID: 1284 (sshd)
-      Tasks: 1 (limit: 1131)
+LISTEN 0  4096   0.0.0.0:22022  0.0.0.0:*  users:(("systemd",pid=1,fd=52))
+LISTEN 0  4096      [::]:22022     [::]:*  users:(("systemd",pid=1,fd=53))
 ```
 
-`active (running)` only means the service came back. Whether your changes did what you wanted takes an actual connection to find out.
+## Test Before You Close Anything
 
-So **before closing this session**, open a second terminal:
+**Don't close the session you're in.** Open a second terminal on the laptop and connect on the new port:
 
 ```bash
 ssh -p 22022 admin@IP_VPS
 ```
 
-If it works you land at the same prompt as before. What I got was:
+If that works, you're done. If it doesn't, the first session is still open and you can fix it from there. If you close it and the new config is broken, the only way back in is your provider's web console.
 
-```output
-ssh: connect to host IP_VPS port 22022: Connection refused
+And to confirm root really is locked out:
+
+```bash
+ssh -p 22022 root@IP_VPS
 ```
 
-Keeping the original session open is what saves you here. If the config is wrong, that connection is the only way back in.
-
-If the new port does not answer, you are probably hitting what I hit. Debian 13 activates SSH through a systemd socket by default, which means the `Port` directive is never read. [Part 2](/blogs/vps-setup-part-2) opens with that and the fix.
+```output
+root@IP_VPS: Permission denied (publickey).
+```
 
 # Making the Connection Shorter
 
-Every connection now needs a non-default port, a username, and an IP I do not have memorised:
-
-```bash
-ssh -p 22022 admin@IP_VPS
-```
-
-That is not a security problem, but it is the kind of friction that gets you copy-pasting commands out of shell history without reading them. It also breaks anything expecting a plain hostname. `scp`, `rsync`, and editor remote extensions each want the port and user passed in their own slightly different syntax.
-
-SSH has a client-side config for this. It lives on **your local machine**; the server neither knows nor cares that it exists:
+Typing `ssh -p 22022 admin@IP_VPS` every time gets old fast. SSH has a config file on the laptop side for this:
 
 ```bash
 nano ~/.ssh/config
@@ -394,61 +386,17 @@ Host vps
 	IdentitiesOnly yes
 ```
 
-Permissions matter for the same reason they did on `authorized_keys`:
-
 ```bash
 chmod 600 ~/.ssh/config
-```
-
-Now it is just:
-
-```bash
 ssh vps
 ```
 
-```output
-Linux vps 6.12.48+deb13-amd64 #1 SMP Debian 6.12.48-1 x86_64
-Last login: Wed May 20 10:02:11 2026 from 203.0.113.41
-admin@vps:~$
-```
+`IdentitiesOnly yes` makes SSH offer only that one key. Without it, it tries every key in your agent, and with `MaxAuthTries 3` on the server you can get rejected before it reaches the right one.
 
-`Host vps` is only a label. Every option under it applies whenever that label is the destination, so the port and username stop being things to remember and become part of what `vps` means.
-
-What I did not expect is how far this reaches past the `ssh` command. Anything that speaks SSH reads the same file:
-
-```bash
-scp backup.tar.gz vps:~/
-rsync -avz ./dist/ vps:~/apps/site/
-```
-
-Editors too. Pointing VS Code's Remote-SSH at `vps` is enough, with no port field, user field, or key path.
-
-`IdentitiesOnly yes` is worth understanding rather than copying. Without it, SSH offers every key in your agent one after another until one is accepted. With more than a few keys loaded, the server can hit `MaxAuthTries` and reject you before reaching the right one. The error is "too many authentication failures", which looks exactly like a broken key setup. This line tells SSH to offer only the key on the `IdentityFile` line.
-
-You can keep adding hosts, and each entry stands alone:
-
-```text
-Host vps
-	HostName IP_VPS
-	User admin
-	Port 22022
-	IdentityFile ~/.ssh/id_ed25519
-	IdentitiesOnly yes
-
-Host vps-root
-	HostName IP_VPS
-	User root
-	Port 22022
-	IdentityFile ~/.ssh/id_ed25519
-	IdentitiesOnly yes
-```
-
-That second entry will not work anymore, since `PermitRootLogin no` is doing its job. Which is a reasonable way to confirm the hardening took effect.
+The nice part is that everything else that uses SSH reads this file too. `scp file vps:~/` and `rsync ./dist/ vps:~/site/` just work, and so does VS Code's Remote-SSH.
 
 # Next Part
 
-The server is no longer in its fresh-install state. Root and a normal user are separated, SSH requires keys, and the obvious entry points are closed.
+So far: the system is updated, there's one user with a key and `sudo`, root can't log in, and SSH only accepts that one user's key on a non-default port.
 
-That is only the login layer, though. Every other port on the machine is still open, nothing is watching for repeated failures, and security updates only happen when I remember to run them.
-
-[Part 2](/blogs/vps-setup-part-2) picks up from here with firewall rules, fail2ban, and automatic patching, and the series carries on through [rootless Podman](/blogs/vps-setup-part-3), [Caddy and HTTPS](/blogs/vps-setup-part-4), and [deploying a real application](/blogs/vps-setup-part-5).
+That only covers the login. Every other port is still open, nothing watches for repeated failures, and updates only happen when I remember. [Part 2](/blogs/vps-setup-2) deals with that: a firewall, fail2ban, automatic updates, and some tuning.
