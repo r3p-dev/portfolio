@@ -18,10 +18,6 @@ const items: { href: string; icon: IconName; label: string }[] = [
   { href: '/projects', icon: 'list-check', label: t('nav_projects') },
 ]
 
-const trailing: { href: string; icon: IconName; label: string }[] = [
-  { href: '/guestbook', icon: 'message-circle', label: t('nav_guestbook') },
-]
-
 const DOCK_ITEM =
   'dock-item flex size-10 items-center justify-center [&_.dock-button]:origin-bottom [&_.dock-button]:transition-transform [&_.dock-button]:duration-[220ms] [&_.dock-button]:ease-[cubic-bezier(0.22,1,0.36,1)] hover:[&_.dock-button]:scale-[1.35] focus-within:[&_.dock-button]:scale-[1.35] [&:hover+.dock-item_.dock-button]:scale-[1.15] [&:has(+.dock-item:hover)_.dock-button]:scale-[1.15] [&:has(details[open])_.dock-button]:scale-100'
 
@@ -59,27 +55,6 @@ function isActive(href: string) {
       <li class={DOCK_ITEM}>
         <NotesMenu locale={locale} path={path} />
       </li>
-
-      {trailing.map((item) => (
-        <li class={DOCK_ITEM}>
-          <a
-            href={getRelativeLocaleUrl(locale, item.href)}
-            aria-current={isActive(item.href) ? 'page' : undefined}
-            class:list={[
-              'dock-button group/nav relative inline-flex size-12 shrink-0 items-center justify-center rounded-full text-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
-              isActive(item.href) && 'bg-muted text-foreground',
-            ]}
-          >
-            <Icon name={item.icon} class="size-6" />
-
-            <span class="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background group-hover/nav:block group-focus-visible/nav:block">
-              {item.label}
-            </span>
-
-            <span class="sr-only">{item.label}</span>
-          </a>
-        </li>
-      ))}
 
       <li class={DOCK_ITEM}>
         <SettingsMenu locale={locale} path={path} />

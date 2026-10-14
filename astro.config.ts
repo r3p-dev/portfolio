@@ -54,9 +54,6 @@ export default defineConfig({
         defaultLocale: I18N.defaultLocale,
         locales: Object.fromEntries(I18N.locales.map((locale) => [locale, locale])),
       },
-      customPages: I18N.locales.map((locale) =>
-        locale === I18N.defaultLocale ? `${SITE_URL}/guestbook` : `${SITE_URL}/${locale}/guestbook`,
-      ),
 
       serialize(item) {
         const path = new URL(item.url).pathname.replace(/^\/id(?=\/|$)/, '') || '/'

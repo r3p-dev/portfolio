@@ -11,8 +11,6 @@ function byNewest(a: { data: { date: Date } }, b: { data: { date: Date } }) {
   return b.data.date.getTime() - a.data.date.getTime()
 }
 
-// Blog and project ids are `<slug>/<locale>`, one file per locale beside each
-// other, mirroring how the `now` collection is split.
 export function entrySlug(id: string) {
   const cut = id.lastIndexOf('/')
 
@@ -34,8 +32,6 @@ function rank(id: string, locale: Locale) {
   return 2
 }
 
-// One entry per slug: the requested locale when it exists, the default locale
-// otherwise, so an untranslated post still renders instead of 404ing.
 function localised<T extends { id: string }>(entries: T[], locale: Locale) {
   const bySlug = new Map<string, T>()
 

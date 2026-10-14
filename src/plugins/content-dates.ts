@@ -35,8 +35,6 @@ function datesIn(dir: string, prefix: string, locales: readonly string[]) {
       .replace(/\.mdx?$/, '')
       .split(sep)
 
-    // `<slug>/<locale>` files all describe the same unprefixed path, so the
-    // locale segment is dropped and the newest date across them wins.
     if (segments.length > 1 && locales.includes(segments.at(-1)!)) {
       segments.pop()
     }

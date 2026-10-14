@@ -15,20 +15,18 @@ COPY --from=install /temp/dev/node_modules node_modules
 COPY . .
 
 ENV NODE_ENV=production
-RUN bun run build
+RUN bun run build && bun scripts/csp-hashes.ts
 
 FROM base AS release
 COPY --from=install /temp/prod/node_modules node_modules
 COPY --from=prerelease /usr/src/app/package.json ./package.json
 COPY --from=prerelease /usr/src/app/dist ./dist
-COPY --from=prerelease /usr/src/app/deploy/healthcheck.ts ./healthcheck.ts
+COPY --from=prerelease /usr/src/app/healthcheck.ts ./healthcheck.ts
+COPY --from=prerelease /usr/src/app/server.ts ./server.ts
 
 ENV PORT=4321
 ENV HOST=0.0.0.0
-ENV GUESTBOOK_DB=/app/data/guestbook.db
-RUN mkdir -p /app/data && chown -R bun:bun /app/data
-VOLUME /app/data
 
 USER bun
 EXPOSE 4321/tcp
-ENTRYPOINT [ "bun", "run", "dist/server/entry.mjs" ]
+ENTRYPOINT [ "bun", "server.ts" ]

@@ -1,203 +1,67 @@
 # r3p.dev
 
-Personal portfolio and blog of **Muhamad Repiyan**: projects, writing on
-infrastructure and web development, and a guestbook.
+The personal website of **Muhamad Repiyan**, a fullstack developer based in
+Indonesia. It is where I share the things I build, write about what I learn, and
+keep a short note on what I am up to right now.
 
-Built with [Astro](https://astro.build), TypeScript, and Tailwind CSS v4.
-Live at **[r3p.dev](https://r3p.dev)**.
+Visit it at **[r3p.dev](https://r3p.dev)**.
 
-## Stack
+## What you will find
 
-| Layer     | Choice                                                             |
-| :-------- | :----------------------------------------------------------------- |
-| Framework | Astro 7, static output, Node standalone adapter for dynamic routes |
-| Language  | TypeScript (`astro/tsconfigs/strictest`)                           |
-| Styling   | Tailwind CSS v4 via `@tailwindcss/vite`, OKLCH design tokens       |
-| Content   | MDX content collections with Zod schemas                           |
-| Runtime   | Bun                                                                |
-| Database  | `node:sqlite` (guestbook only)                                     |
-| Deploy    | Docker → GHCR → VPS (Podman + systemd)                             |
+- **About me**: a short introduction, the places I have worked, and the tools I
+  enjoy using.
+- **Projects**: things I have designed and built, each with a write-up of why it
+  exists and how it came together. Projects that are still in progress are
+  marked as such.
+- **Blog**: longer posts on setting up servers, running my own corner of the
+  internet, Linux desktops, and web development, written from the point of view
+  of someone learning as they go.
+- **Now**: a living page about what I am building, running, and learning at the
+  moment.
+- **Tags**: every project and post is labelled by topic, so you can follow a
+  subject across the whole site.
 
-## Getting started
+## Made to be easy to read
 
-Requires [Bun](https://bun.sh). The `engines` field pins Node >= 22.12, since
-the guestbook relies on the `node:sqlite` built-in.
+- **Two languages.** The whole site is available in English and Bahasa
+  Indonesia. Switch between them at any time from the settings menu.
+- **Light or dark.** Choose a light theme, a dark theme, or let the site follow
+  your device. Your choice is remembered.
+- **Comfortable for everyone.** Colours are chosen for clear contrast, the site
+  works with a keyboard and screen readers, and pages load quickly, even on a
+  slow connection.
+- **Reading helpers.** Longer posts include a table of contents, images can be
+  opened full size, and code examples can be copied with one click.
+- **Follow along.** New posts are published to an [RSS feed](https://r3p.dev/rss.xml),
+  so you can read them in your favourite reader.
+
+## Tech stack
+
+- [Astro](https://astro.build) for building the pages
+- [TypeScript](https://www.typescriptlang.org) for the code
+- [Tailwind CSS](https://tailwindcss.com) for the styling
+- [MDX](https://mdxjs.com) for writing posts and project pages
+- [Bun](https://bun.sh) for running everything
+
+## Run it yourself
+
+You will need [Bun](https://bun.sh) installed. Then:
 
 ```sh
+git clone https://github.com/r3p-dev/portfolio.git
+cd portfolio
 bun install
-bun dev          # http://localhost:4321
+bun dev
 ```
 
-| Command         | Action                                   |
-| :-------------- | :--------------------------------------- |
-| `bun install`   | Install dependencies                     |
-| `bun dev`       | Dev server at `localhost:4321`           |
-| `bun run build` | Production build to `./dist/`            |
-| `bun preview`   | Preview the production build locally     |
-| `bun run check` | `astro check`, typecheck `.astro` and TS |
+Open [http://localhost:4321](http://localhost:4321) in your browser to see the
+site.
 
-CI runs `check` then `build` on every push and pull request.
+## Get in touch
 
-## Architecture
+I am open to interesting work and conversations.
 
-### Rendering
-
-The site is **static by default**. Only the guestbook opts out via
-`export const prerender = false`, which is why the Node adapter is present:
-`bun run dist/server/entry.mjs` serves the prerendered pages plus that one
-dynamic route.
-
-### Routes
-
-| Route                        | Notes                              |
-| :--------------------------- | :--------------------------------- |
-| `/`                          | Home, bio, experience, skills      |
-| `/projects`, `/projects/:id` | Project collection                 |
-| `/blogs`, `/blogs/:id`       | Paginated at `/blogs/page/:n`      |
-| `/tags`, `/tags/:tag`        | Cross-collection tag index         |
-| `/now`                       | What I'm currently working on      |
-| `/guestbook`                 | Server-rendered, accepts `POST`    |
-| `/rss.xml`, `/robots.txt`    | Generated; sitemap via integration |
-
-Page routes are mirrored under `/id/` (see [i18n](#internationalization)); the
-`rss.xml`, `robots.txt`, and sitemap endpoints are served once at the root.
-
-### Content
-
-Three collections defined in [`src/content.config.ts`](src/content.config.ts),
-loaded from `src/contents/` as MDX and validated with Zod:
-
-- **`blogs`**: `title`, `description`, `date`, optional `updated`, `tags`,
-  `cover`, `draft`
-- **`projects`**: the above plus optional `repository`, `demo`, and a `wip` flag
-- **`now`**: one file per locale, just `updatedAt`
-
-`blogs` and `projects` are translated per entry: each one is a directory named
-after its slug, holding one file per locale (`vps-setup-1/en.mdx`,
-`vps-setup-1/id.mdx`). Entry ids are therefore `<slug>/<locale>`, and
-`entrySlug()` in [`src/lib/content/`](src/lib/content/) strips the locale back
-off for URLs. `allBlogs(locale)` and `allProjects(locale)` return one entry per
-slug, falling back to the default locale when a translation does not exist yet,
-so an untranslated post still renders instead of 404ing.
-
-The Markdown pipeline adds a few local plugins from [`src/plugins/`](src/plugins/):
-
-- `rehype-demote-headings`: shifts authored `h1`–`h5` down one level so the
-  page's real `h1` stays unique
-- `rehype-scrollable-tables`: wraps tables in a horizontally scrollable
-  container instead of letting them overflow the page
-- `shiki-code-blocks`: Shiki transformer for code block chrome and
-  `output`-language blocks
-- `content-dates`: reads frontmatter at config time to emit accurate
-  `lastmod` values in the sitemap
-
-Code blocks use dual Shiki themes (`github-light-default` / `github-dark-default`)
-that switch with the site theme.
-
-### Internationalization
-
-English is the default locale and is unprefixed; Indonesian lives under `/id/`.
-
-Messages are plain typed objects in [`src/lib/i18n/`](src/lib/i18n/). `en.ts` is
-the source of truth: `MessageKey` is derived from it, and `id.ts` is declared
-`: Messages`, so a missing or misspelled translation key is a **type error**,
-caught by `bun run check`.
-
-Long-form content is translated the same way, one MDX file per locale beside
-each other (see [Content](#content)).
-
-### SEO
-
-[`src/lib/seo/`](src/lib/seo/) centralizes canonical URLs, `hreflang`
-alternates, Open Graph metadata, and JSON-LD (`Person`, `WebSite`, `WebPage`,
-`BlogPosting`). Sitemap entries carry per-page `lastmod` and priority.
-
-### Guestbook
-
-The only stateful part of the site. Entries are stored in SQLite via
-`node:sqlite` in WAL mode, with the schema created on first connection
-([`src/lib/server/db.ts`](src/lib/server/db.ts)).
-
-Submissions are handled with POST-redirect-GET and are protected by a honeypot
-field, length validation, and suppression of identical `(name, message)` pairs
-submitted within the same hour. No JavaScript is required to sign it: the form
-works as a plain HTML `POST`.
-
-### Theming
-
-Light and dark palettes are OKLCH custom properties in
-[`src/styles/globals.css`](src/styles/globals.css). The site defaults to dark; a
-small inline script in `<head>` applies the stored preference before first paint
-to avoid a flash. Users can pick light, dark, or system.
-
-Colors are tuned to meet **WCAG AA (4.5:1)** contrast, with the two palettes
-kept at comparable ratios rather than each drifting on its own. Body text
-(`--muted-foreground`) sits at roughly 7.5:1 in both themes and dimmer text uses
-the dedicated `--muted-foreground-subtle` token (around 5.4:1) rather than a
-Tailwind alpha modifier, which would silently fail AA.
-
-### Performance
-
-- Stylesheets are inlined (`build.inlineStylesheets: 'always'`) so there is no
-  render-blocking CSS request.
-- JetBrains Mono is served through Astro's font pipeline with `font-display: swap`,
-  a preloaded WOFF2, and a metric-matched local fallback, so text paints
-  immediately.
-- Images go through `astro:assets`; the logo uses `densities` to serve
-  1x/2x/3x variants.
-- Link prefetching is enabled site-wide on hover, alongside view transitions.
-
-## Project layout
-
-```text
-src/
-├── assets/       # Images and SVG icons processed by astro:assets
-├── components/
-│   ├── atoms/    # Button, Card, Badge, Icon, ...
-│   ├── molecules/
-│   ├── organisms/# Nav, pagination, lightbox, TOC
-│   ├── layouts/  # AppLayout: <head>, nav, footer
-│   └── pages/    # Page-level composition, kept out of src/pages
-├── contents/     # MDX source for blogs, projects, now
-├── lib/
-│   ├── content/  # Collection queries, TOC, formatting
-│   ├── i18n/     # Typed message dictionaries
-│   ├── seo/      # Canonicals, OG, JSON-LD
-│   └── server/   # Guestbook DB, validation, form handling
-├── pages/        # Routing only; mirrored under [lang]/
-├── plugins/      # Local rehype/Shiki plugins
-└── styles/       # Tailwind entry and design tokens
-```
-
-Routing files in `src/pages/` stay thin and delegate to `src/components/pages/`,
-so the English and Indonesian variants of a page share one implementation.
-
-Path aliases (`tsconfig.json`): `@assets/*`, `@components/*`, `@lib/*`,
-`@plugins/*`, `@styles/*`.
-
-## Configuration
-
-| Variable       | Default               | Purpose             |
-| :------------- | :-------------------- | :------------------ |
-| `GUESTBOOK_DB` | `./data/guestbook.db` | SQLite file path    |
-| `HOST`         | `0.0.0.0` (Docker)    | Server bind address |
-| `PORT`         | `4321`                | Server port         |
-
-`data/` is gitignored and mounted as a volume in production.
-
-## Deployment
-
-A multi-stage [`Dockerfile`](Dockerfile) builds on `oven/bun`, installs
-production-only dependencies, and runs the compiled server as the non-root
-`bun` user with `/app/data` as a volume.
-
-Deployment is automated in [`.github/workflows/`](.github/workflows/):
-
-- **CI**: typecheck and build on push and pull requests.
-- **CD**: on a successful CI run against `main`, builds and pushes the image to
-  GHCR, then deploys over SSH: the VPS pulls by digest, restarts the
-  `portfolio` systemd user service under Podman, and polls a health endpoint.
-  If the service fails to come up, it **automatically rolls back** to the
-  previous image digest.
-
-Required repository secrets: `VPS_HOST`, `VPS_PORT`, `VPS_USER`, `VPS_SSH_KEY`.
+- Email: [repiyan@r3p.dev](mailto:repiyan@r3p.dev)
+- GitHub: [r3p-dev](https://github.com/r3p-dev)
+- LinkedIn: [Muhamad Repiyan](https://linkedin.com/in/muhamad-repiyan)
+- CV: [download as PDF](https://r3p.dev/cv.pdf)

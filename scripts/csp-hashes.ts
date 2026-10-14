@@ -1,21 +1,13 @@
 import { Glob } from 'bun'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 
-// CSS Tailwind hasil build tidak deterministik antar environment (beda dari
-// build lokal `bun run build`). Jalankan script ini dari dist/ hasil `podman
-// build .` (image production sungguhan), bukan build lokal, biar hash-nya
-// cocok dengan yang benar-benar dikirim ke browser.
-
-const DYNAMIC_ROUTES = ['/guestbook', '/id/guestbook']
+const OUTPUT = 'dist/csp.txt'
 
 const found = { script: new Set<string>(), style: new Set<string>() }
 const re = /<(script|style)(\s[^>]*)?>([\s\S]*?)<\/\1>/g
 
-function collect(html: string) {
-  for (const m of html.matchAll(re)) {
+for await (const file of new Glob('dist/**/*.html').scan()) {
+  for (const m of (await Bun.file(file).text()).matchAll(re)) {
     const [tag, attrs, body] = [m[1] ?? '', m[2] ?? '', m[3] ?? '']
     if (!body.trim() || /\ssrc=|ld\+json/.test(attrs)) continue
     const hash = createHash('sha256').update(body).digest('base64')
@@ -23,44 +15,19 @@ function collect(html: string) {
   }
 }
 
-for await (const file of new Glob('dist/**/*.html').scan()) {
-  collect(await Bun.file(file).text())
-}
+const policy = [
+  "default-src 'none'",
+  `script-src 'self' ${[...found.script].join(' ')} https://static.cloudflareinsights.com`,
+  `style-src 'self' ${[...found.style].join(' ')}`,
+  "style-src-attr 'self' 'unsafe-inline'",
+  "img-src 'self'",
+  "font-src 'self'",
+  "manifest-src 'self'",
+  "connect-src 'self' https://cloudflareinsights.com",
+  "form-action 'self'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join('; ')
 
-const port = 4399
-const dbDir = mkdtempSync(join(tmpdir(), 'csp-hashes-'))
-
-const server = Bun.spawn(['bun', 'dist/server/entry.mjs'], {
-  env: {
-    ...process.env,
-    PORT: String(port),
-    HOST: '127.0.0.1',
-    GUESTBOOK_DB: join(dbDir, 'guestbook.db'),
-  },
-  stdout: 'ignore',
-  stderr: 'ignore',
-})
-
-try {
-  const base = `http://127.0.0.1:${port}`
-  for (let ready = false, attempt = 0; !ready; attempt++) {
-    if (attempt >= 50) throw new Error('Server tidak siap setelah 5 detik')
-    ready = await fetch(base).then(
-      (r) => r.ok || r.status === 404,
-      () => false,
-    )
-    if (!ready) await Bun.sleep(100)
-  }
-
-  for (const route of DYNAMIC_ROUTES) {
-    const res = await fetch(`http://127.0.0.1:${port}${route}`)
-    collect(await res.text())
-  }
-} finally {
-  server.kill()
-  await server.exited
-  rmSync(dbDir, { recursive: true, force: true })
-}
-
-console.log('script-src', [...found.script].join(' '))
-console.log('style-src', [...found.style].join(' '))
+await Bun.write(OUTPUT, policy)
+console.log(`${OUTPUT}: ${found.script.size} script, ${found.style.size} style hash`)

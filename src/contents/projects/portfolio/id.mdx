@@ -1,6 +1,6 @@
 ---
 title: Situs Portofolio Pribadi
-description: 'Situs yang sedang Anda baca. Portofolio yang mengutamakan konten, dibangun dengan Astro, TypeScript, dan Tailwind CSS: dirender secara statis, dua bahasa, dan dilayani dari satu proses Node yang sekaligus menjalankan buku tamu.'
+description: 'Situs yang sedang Anda baca. Portofolio yang mengutamakan konten, dibangun dengan Astro, TypeScript, dan Tailwind CSS: dirender secara statis, dua bahasa, dan dilayani dari satu kontainer kecil.'
 date: '2026-05-25'
 updated: '2026-08-31'
 tags: [astro, typescript, tailwindcss, mdx, i18n, seo, portfolio]
@@ -13,13 +13,11 @@ demo: https://r3p.dev
 
 Situs ini. Portofolio pribadi yang dibangun dengan Astro, TypeScript, dan Tailwind CSS, dirancang di sekitar konten, bukan di sekitar sebuah pustaka komponen.
 
-Ini adalah pembangunan ulang. Versi sebelumnya memakai SvelteKit dan MDsveX; versi ini menukar framework sisi klien dengan keluaran statis, dan hanya menyisakan server di tempat yang memang benar-benar membutuhkannya.
+Ini adalah pembangunan ulang. Versi sebelumnya memakai SvelteKit dan MDsveX; versi ini menukar framework sisi klien dengan keluaran statis.
 
 # Gambaran Umum
 
-Hampir seluruh rute dirender lebih dulu saat proses build. Tulisan blog, proyek, halaman tag, dan halaman utama sudah berupa HTML biasa ketika sampai di browser, tanpa tahap hidrasi dan tanpa runtime framework yang dikirim ke klien.
-
-Buku tamu adalah satu-satunya pengecualian. Ia menerima kiriman formulir dan membaca basis data pada setiap permintaan, sehingga ia keluar dari prerender dan ditangani oleh server Node. Satu rute itulah alasan penuh mengapa deployment-nya berupa kontainer, bukan sekadar folder berisi berkas.
+Seluruh rute dirender lebih dulu saat proses build. Tulisan blog, proyek, halaman tag, dan halaman utama sudah berupa HTML biasa ketika sampai di browser, tanpa tahap hidrasi dan tanpa runtime framework yang dikirim ke klien.
 
 Interaktivitas di tempat lain (pengalih tema, tombol salin kode, penanda daftar isi, lightbox gambar) ditulis sebagai skrip vanilla kecil. Tanpa React, tanpa Svelte, tanpa islands.
 
@@ -41,10 +39,6 @@ Bahasa Inggris dilayani tanpa awalan dan bahasa Indonesia berada di bawah `/id`,
 
 Metadata, URL kanonis, tag Open Graph, dan JSON-LD dibangun dari satu modul konfigurasi. Setiap halaman menghasilkan graf data terstruktur (Person, WebSite, WebPage, BreadcrumbList, dan BlogPosting bila relevan), dan sitemap mengambil nilai `lastmod` dari frontmatter konten, bukan dari stempel waktu berkas.
 
-## Buku Tamu
-
-Sebuah formulir, sebuah tabel SQLite, dan tanpa akun. Validasi, kolom honeypot, dan penjaga duplikat berjalan di sisi server; basis datanya memakai `node:sqlite` dari pustaka standar, sehingga fitur ini tidak menambah dependensi sama sekali.
-
 # Tumpukan Teknologi
 
 Astro
@@ -52,10 +46,9 @@ TypeScript
 Tailwind CSS
 MDX
 Shiki
-SQLite lewat `node:sqlite`
 
 # Filosofi Struktur
 
 Komponen disusun sebagai atom, molekul, dan organisme, dengan komponen tingkat halaman dipisahkan dari rute yang merendernya. Rute dibuat tipis, hanya menyelesaikan parameter lalu menyerahkannya, sehingga versi Inggris dan Indonesia dari satu halaman berbagi satu implementasi alih-alih berjalan sendiri-sendiri.
 
-Naluri yang sama mengatur daftar dependensi. Keluaran statis, SQLite dari pustaka standar, dan skrip yang ditulis sendiri alih-alih pustaka pihak ketiga membuat sangat sedikit hal di sini yang bisa lapuk.
+Naluri yang sama mengatur daftar dependensi. Keluaran statis dan skrip yang ditulis sendiri alih-alih pustaka pihak ketiga membuat sangat sedikit hal di sini yang bisa lapuk.
