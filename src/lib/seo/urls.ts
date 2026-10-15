@@ -1,10 +1,6 @@
 import { getAbsoluteLocaleUrl, getAbsoluteLocaleUrlList } from 'astro:i18n'
 import { defaultLocale, locales, type Locale } from '@lib/i18n'
-
-export type Alternate = {
-  hreflang: string
-  href: string
-}
+import type { Alternate } from './types'
 
 export function canonical(path: string, locale: Locale) {
   return getAbsoluteLocaleUrl(locale, path)

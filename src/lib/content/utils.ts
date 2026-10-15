@@ -1,5 +1,4 @@
 import { getCollection, getEntry } from 'astro:content'
-
 import { defaultLocale, isLocale, type Locale } from '@lib/i18n'
 import type { Blog, Project, TaggedEntry } from './types'
 

@@ -1,6 +1,6 @@
-import { defaultLocale, type Locale } from '../i18n'
+import { defaultLocale, type Locale } from '@lib/i18n'
 import { absolute, ORIGIN, PROFILES, SITE } from './config'
-import type { Crumb } from './types'
+import type { Crumb, WebPageOptions, BlogPostingOptions } from './types'
 
 const PERSON_ID = `${ORIGIN}/#person`
 const WEBSITE_ID = `${ORIGIN}/#website`
@@ -54,18 +54,6 @@ export function siteNodes(description: string, locale: Locale = defaultLocale) {
   return [person(), website(description, locale)]
 }
 
-type WebPageOptions = {
-  canonical: string
-  name: string
-  description: string
-  locale?: Locale
-  alsoTypes?: readonly string[]
-  image?: string
-  breadcrumb?: boolean
-  dateModified?: string
-  mainEntity?: unknown
-}
-
 export function webPage({
   canonical,
   name,
@@ -100,17 +88,6 @@ export function webPage({
     ...(mainEntity ? { mainEntity } : {}),
     ...(breadcrumb ? { breadcrumb: { '@id': `${canonical}#breadcrumb` } } : {}),
   }
-}
-
-type BlogPostingOptions = {
-  canonical: string
-  headline: string
-  description: string
-  datePublished: string
-  dateModified?: string
-  locale?: Locale
-  tags?: readonly string[]
-  image?: string
 }
 
 export function blogPosting({

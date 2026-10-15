@@ -1,6 +1,5 @@
 import { i18n } from 'astro:config/client'
 import { toCodes } from 'astro:i18n'
-
 import { en } from './en'
 import { id } from './id'
 import type { Locale, MessageKey, Messages } from './types'
@@ -12,7 +11,6 @@ if (!i18n) {
 const catalogues = { en, id } satisfies Record<Locale, Messages>
 
 export const locales = toCodes(i18n.locales) as Locale[]
-
 export const defaultLocale = i18n.defaultLocale as Locale
 
 for (const locale of locales) {

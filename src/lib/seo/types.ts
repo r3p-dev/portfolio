@@ -21,3 +21,31 @@ export type PageSeo = {
   next?: string | undefined
   jsonLd?: readonly object[]
 }
+
+export type WebPageOptions = {
+  canonical: string
+  name: string
+  description: string
+  locale?: Locale
+  alsoTypes?: readonly string[]
+  image?: string
+  breadcrumb?: boolean
+  dateModified?: string
+  mainEntity?: unknown
+}
+
+export type BlogPostingOptions = {
+  canonical: string
+  headline: string
+  description: string
+  datePublished: string
+  dateModified?: string
+  locale?: Locale
+  tags?: readonly string[]
+  image?: string
+}
+
+export type Alternate = {
+  hreflang: string
+  href: string
+}

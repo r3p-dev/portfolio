@@ -1,5 +1,4 @@
 import { site } from 'astro:config/client'
-
 import type { Locale } from '@lib/i18n'
 
 if (!site) {
