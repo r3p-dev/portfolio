@@ -178,7 +178,6 @@ services:
     image: ${IMAGE}
     labels:
       vps.domain: r3p.dev
-      vps.redirect: www.r3p.dev
       vps.port: '4321'
     cap_drop: [ALL]
     healthcheck:
@@ -191,7 +190,6 @@ services:
 
 - `image: ${IMAGE}` is replaced with the exact image the workflow just built, pinned by its digest. A tag can be moved later; a digest can't.
 - `vps.domain` and `vps.port` turn into the Traefik labels from Part 4. I don't write those by hand anymore.
-- `vps.redirect` sends `www` to the main domain with a 301.
 - The health check is what tells the server whether the new version actually works.
 
 Since this file comes from CI, the server is strict about what it accepts:
@@ -234,7 +232,7 @@ vps env myapp       # edit secrets, then restart to apply
 
 ```output
 APP                  STATE        RELEASE                    DOMAINS
-portfolio            running      20261014T161203.482913377  r3p.dev,www.r3p.dev
+portfolio            running      20261014T161203.482913377  r3p.dev
 ```
 
 `vps help` lists the rest.

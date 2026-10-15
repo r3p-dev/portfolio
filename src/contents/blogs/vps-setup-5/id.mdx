@@ -178,7 +178,6 @@ services:
     image: ${IMAGE}
     labels:
       vps.domain: r3p.dev
-      vps.redirect: www.r3p.dev
       vps.port: '4321'
     cap_drop: [ALL]
     healthcheck:
@@ -191,7 +190,6 @@ services:
 
 - `image: ${IMAGE}` diganti dengan image persis yang baru dibangun workflow, dikunci dengan digest-nya. Tag bisa dipindah nanti; digest tidak.
 - `vps.domain` dan `vps.port` berubah jadi label Traefik dari Bagian 4. Saya tidak menulisnya manual lagi.
-- `vps.redirect` mengarahkan `www` ke domain utama dengan 301.
 - Health check-nya yang memberi tahu server apakah versi baru benar-benar jalan.
 
 Karena berkas ini datang dari CI, server ketat soal apa yang diterimanya:
@@ -234,7 +232,7 @@ vps env myapp       # edit secret, lalu restart untuk menerapkan
 
 ```output
 APP                  STATE        RELEASE                    DOMAINS
-portfolio            running      20261014T161203.482913377  r3p.dev,www.r3p.dev
+portfolio            running      20261014T161203.482913377  r3p.dev
 ```
 
 `vps help` menampilkan sisanya.

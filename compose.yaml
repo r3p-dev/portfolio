@@ -3,7 +3,6 @@ services:
     image: ${IMAGE}
     labels:
       vps.domain: r3p.dev
-      vps.redirect: www.r3p.dev
       vps.port: '4321'
     cap_drop: [ALL]
     healthcheck:
